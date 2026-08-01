@@ -11,6 +11,11 @@ from . import __version__
 from .coverage import capture_snapshot, collect_all, verify_capture_files
 
 
+def _invocation_path(value: str) -> Path:
+    """Resolve a CLI path from the directory where portfolio-book was invoked."""
+    return Path(value).resolve()
+
+
 def _staged_paths(repo: Path) -> tuple[str, ...]:
     output = subprocess.run(
         ("git", "diff", "--cached", "--name-only", "-z"),
@@ -24,25 +29,17 @@ def _staged_paths(repo: Path) -> tuple[str, ...]:
 
 
 def _capture_snapshot(arguments: argparse.Namespace) -> int:
-    repo = Path(arguments.repo).resolve(strict=True)
-    output = Path(arguments.output)
-    if not output.is_absolute():
-        output = repo / output
-    boundary = Path(arguments.boundary)
-    if not boundary.is_absolute():
-        boundary = repo / boundary
+    repo = _invocation_path(arguments.repo).resolve(strict=True)
+    output = _invocation_path(arguments.output)
+    boundary = _invocation_path(arguments.boundary)
     capture_snapshot(repo, boundary, output)
     return 0
 
 
 def _collect_all(arguments: argparse.Namespace) -> int:
-    repo = Path(arguments.repo).resolve(strict=True)
-    snapshot = Path(arguments.snapshot)
-    output = Path(arguments.output_dir)
-    if not snapshot.is_absolute():
-        snapshot = repo / snapshot
-    if not output.is_absolute():
-        output = repo / output
+    repo = _invocation_path(arguments.repo).resolve(strict=True)
+    snapshot = _invocation_path(arguments.snapshot)
+    output = _invocation_path(arguments.output_dir)
     collect_all(
         repo=repo,
         snapshot_path=snapshot,
@@ -54,13 +51,9 @@ def _collect_all(arguments: argparse.Namespace) -> int:
 
 
 def _verify_capture(arguments: argparse.Namespace) -> int:
-    repo = Path(arguments.repo).resolve(strict=True)
-    snapshot = Path(arguments.snapshot)
-    output = Path(arguments.output_dir)
-    if not snapshot.is_absolute():
-        snapshot = repo / snapshot
-    if not output.is_absolute():
-        output = repo / output
+    repo = _invocation_path(arguments.repo).resolve(strict=True)
+    snapshot = _invocation_path(arguments.snapshot)
+    output = _invocation_path(arguments.output_dir)
     verify_capture_files(
         repo=repo,
         snapshot_path=snapshot,
@@ -78,26 +71,44 @@ def _parser() -> argparse.ArgumentParser:
     snapshot = commands.add_parser(
         "capture-snapshot", help="freeze local refs, source tree, PDFs, and AI paths"
     )
-    snapshot.add_argument("--repo", default=".")
     snapshot.add_argument(
-        "--boundary", default="docs/Portfolio_Book/source_boundary.json"
+        "--repo",
+        default="../..",
+        help="repository root (relative paths use the invocation directory)",
+    )
+    snapshot.add_argument(
+        "--boundary",
+        default="source_boundary.json",
+        help="source boundary (relative paths use the invocation directory)",
     )
     snapshot.add_argument(
         "--output",
-        default="docs/Portfolio_Book/output/research/snapshot_manifest.json",
+        default="output/research/snapshot_manifest.json",
+        help="snapshot destination (relative paths use the invocation directory)",
     )
     snapshot.set_defaults(handler=_capture_snapshot)
 
     collect = commands.add_parser(
         "collect-all", help="collect from one frozen snapshot and reconcile GitHub"
     )
-    collect.add_argument("--repo", default=".")
     collect.add_argument(
-        "--snapshot",
-        default="docs/Portfolio_Book/output/research/snapshot_manifest.json",
+        "--repo",
+        default="../..",
+        help="repository root (relative paths use the invocation directory)",
     )
     collect.add_argument(
-        "--output-dir", default="docs/Portfolio_Book/output/research"
+        "--snapshot",
+        "--manifest",
+        dest="snapshot",
+        default="output/research/snapshot_manifest.json",
+        help="snapshot manifest (relative paths use the invocation directory)",
+    )
+    collect.add_argument(
+        "--output-dir",
+        "--output",
+        dest="output_dir",
+        default="output/research",
+        help="capture output directory (relative paths use the invocation directory)",
     )
     collect.add_argument(
         "--repository", default="zbnerd/probabilistic-valuation-engine"
@@ -107,13 +118,24 @@ def _parser() -> argparse.ArgumentParser:
     verify = commands.add_parser(
         "verify-source-capture", help="reconcile every stored capture ledger and archive"
     )
-    verify.add_argument("--repo", default=".")
     verify.add_argument(
-        "--snapshot",
-        default="docs/Portfolio_Book/output/research/snapshot_manifest.json",
+        "--repo",
+        default="../..",
+        help="repository root (relative paths use the invocation directory)",
     )
     verify.add_argument(
-        "--output-dir", default="docs/Portfolio_Book/output/research"
+        "--snapshot",
+        "--manifest",
+        dest="snapshot",
+        default="output/research/snapshot_manifest.json",
+        help="snapshot manifest (relative paths use the invocation directory)",
+    )
+    verify.add_argument(
+        "--output-dir",
+        "--root",
+        dest="output_dir",
+        default="output/research",
+        help="capture root (relative paths use the invocation directory)",
     )
     verify.set_defaults(handler=_verify_capture)
     return parser

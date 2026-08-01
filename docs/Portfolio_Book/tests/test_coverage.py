@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import portfolio_builder.cli as cli_module
 import portfolio_builder.coverage as coverage_module
 import portfolio_builder.github_collector as github_collector
 from portfolio_builder.coverage import (
@@ -43,6 +44,96 @@ from portfolio_builder.relations import (
     derive_explicit_relations,
     validate_downstream_relation_references,
 )
+
+
+def test_cli_resolves_task_10_paths_from_invocation_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    repo = tmp_path / "repo"
+    book = repo / "docs" / "Portfolio_Book"
+    book.mkdir(parents=True)
+    monkeypatch.chdir(book)
+
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def fake_capture(*args: object, **kwargs: object) -> None:
+        calls.append(("capture", args, kwargs))
+
+    def fake_collect(*args: object, **kwargs: object) -> None:
+        calls.append(("collect", args, kwargs))
+
+    def fake_verify(*args: object, **kwargs: object) -> None:
+        calls.append(("verify", args, kwargs))
+
+    monkeypatch.setattr(cli_module, "capture_snapshot", fake_capture)
+    monkeypatch.setattr(cli_module, "collect_all", fake_collect)
+    monkeypatch.setattr(cli_module, "verify_capture_files", fake_verify)
+    monkeypatch.setattr(cli_module, "_staged_paths", lambda _: ())
+
+    assert cli_module.main(
+        [
+            "capture-snapshot",
+            "--repo",
+            "../..",
+            "--boundary",
+            "source_boundary.json",
+            "--output",
+            "output/research/snapshot_manifest.json",
+        ]
+    ) == 0
+    assert cli_module.main(
+        [
+            "collect-all",
+            "--repo",
+            "../..",
+            "--repository",
+            "zbnerd/probabilistic-valuation-engine",
+            "--manifest",
+            "output/research/snapshot_manifest.json",
+            "--output",
+            "output/research",
+        ]
+    ) == 0
+    assert cli_module.main(
+        [
+            "verify-source-capture",
+            "--manifest",
+            "output/research/snapshot_manifest.json",
+            "--root",
+            "output/research",
+        ]
+    ) == 0
+
+    manifest = book / "output/research/snapshot_manifest.json"
+    output = book / "output/research"
+    assert calls == [
+        (
+            "capture",
+            (repo.resolve(), book / "source_boundary.json", manifest),
+            {},
+        ),
+        (
+            "collect",
+            (),
+            {
+                "repo": repo.resolve(),
+                "snapshot_path": manifest,
+                "output_dir": output,
+                "repository_name": "zbnerd/probabilistic-valuation-engine",
+                "staged_output_paths": (),
+            },
+        ),
+        (
+            "verify",
+            (),
+            {
+                "repo": repo.resolve(),
+                "snapshot_path": manifest,
+                "output_dir": output,
+                "staged_output_paths": (),
+            },
+        ),
+    ]
 
 
 def _hash(value: bytes) -> str:

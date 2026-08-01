@@ -28,6 +28,14 @@ _ISSUE_REFERENCE = re.compile(
 )
 _MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 _RUN_KEYS = frozenset({"run_id", "execution_id", "stable_run_id"})
+_DIRECT_REFERENCE_KEYS = frozenset(
+    {
+        "direct_execution_reference",
+        "direct_source_reference",
+        "execution_reference",
+        "source_reference",
+    }
+)
 _DIFF_HASH_KEYS = frozenset(
     {"diff_sha256", "patch_sha256", "patch_raw_sha256", "patch_stored_sha256"}
 )
@@ -293,26 +301,87 @@ def _run_identifiers(source: SourceRecord) -> tuple[tuple[str, str, str], ...]:
 def _same_execution_relations(
     sources: tuple[SourceRecord, ...]
 ) -> Iterable[RelationCandidate]:
-    groups: dict[tuple[str, str], list[tuple[SourceRecord, str]]] = {}
+    groups: dict[str, list[tuple[SourceRecord, str, str]]] = {}
     for source in sources:
         for key, value, locator in _run_identifiers(source):
-            groups.setdefault((key, value), []).append((source, locator))
+            groups.setdefault(value, []).append((source, key, locator))
     candidates: list[RelationCandidate] = []
-    for (key, value), linked in sorted(groups.items()):
+    for value, linked in sorted(groups.items()):
         unique = sorted(
-            {source.source_id: (source, locator) for source, locator in linked}.values(),
+            {
+                source.source_id: (source, key, locator)
+                for source, key, locator in linked
+            }.values(),
             key=lambda item: item[0].source_id.encode("utf-8"),
         )
         if len(unique) < 2:
             continue
-        anchor, anchor_locator = unique[0]
-        for source, locator in unique[1:]:
-            evidence = {"field": key, "stable_identifier": value}
+        anchor, anchor_key, anchor_locator = unique[0]
+        for source, key, locator in unique[1:]:
+            evidence = {
+                "owner_field": key,
+                "stable_identifier": value,
+                "target_field": anchor_key,
+            }
             candidates.append(
                 _candidate(source.source_id, "same-execution", anchor.source_id, locator, evidence)
             )
+            reverse_evidence = {
+                "owner_field": anchor_key,
+                "stable_identifier": value,
+                "target_field": key,
+            }
             candidates.append(
-                _candidate(anchor.source_id, "same-execution", source.source_id, anchor_locator, evidence)
+                _candidate(
+                    anchor.source_id,
+                    "same-execution",
+                    source.source_id,
+                    anchor_locator,
+                    reverse_evidence,
+                )
+            )
+    return tuple(candidates)
+
+
+def _direct_execution_relations(
+    sources: tuple[SourceRecord, ...]
+) -> Iterable[RelationCandidate]:
+    candidates: list[RelationCandidate] = []
+    for source in sources:
+        for locator, value in _walk(source.payload):
+            key = locator.rsplit(".", 1)[-1]
+            if key not in _DIRECT_REFERENCE_KEYS:
+                continue
+            if not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"direct execution/source reference is not a stable ID: {source.source_id}|{locator}"
+                )
+            matches = tuple(
+                target
+                for target in sources
+                if target.source_id == value or target.source_locator == value
+            )
+            if not matches:
+                raise ValueError(
+                    f"direct execution/source reference target is missing: {value}"
+                )
+            if len(matches) != 1:
+                raise ValueError(
+                    f"direct execution/source reference target is ambiguous: {value}"
+                )
+            target = matches[0]
+            if target.source_id == source.source_id:
+                raise ValueError(
+                    f"direct execution/source reference targets its owner: {value}"
+                )
+            candidates.append(
+                _candidate(
+                    source.source_id,
+                    "same-execution",
+                    target.source_id,
+                    locator,
+                    {"direct_reference": value, "field": key},
+                )
             )
     return tuple(candidates)
 
@@ -342,6 +411,7 @@ def derive_explicit_relations(
         candidates.extend(_text_relations(source, commits, pulls, issues, documents))
         candidates.extend(_diff_hash_relations(source, diff_hashes))
     candidates.extend(_same_execution_relations(frozen))
+    candidates.extend(_direct_execution_relations(frozen))
     ordered = tuple(
         sorted(
             candidates,

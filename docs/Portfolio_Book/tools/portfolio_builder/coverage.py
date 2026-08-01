@@ -10,6 +10,7 @@ import csv
 import hashlib
 import json
 import os
+import subprocess
 import tarfile
 import tempfile
 from dataclasses import dataclass, replace
@@ -20,12 +21,13 @@ from typing import Iterable, Mapping, Sequence
 from .ai_trace_collector import collect_ai_traces
 from .canonical_io import read_jsonl, write_jsonl
 from .document_collector import collect_documents
-from .git_collector import GitCapture, collect_git_evidence
+from .git_collector import EMPTY_TREE_SHA, GitCapture, collect_git_evidence
 from .github_client import CheckpointStore, GitHubClient
 from .github_collector import REPOSITORY, ReconciliationResult, reconcile_github
 from .models import (
     DocumentClaim,
     GitHubEndpointFingerprint,
+    RefSnapshot,
     SnapshotManifest,
     SourceBoundary,
     SourceRecord,
@@ -183,6 +185,82 @@ def _stable_set(label: str, expected: Iterable[str], captured: Iterable[str]) ->
         raise CoverageError(f"{label}: unexpected stable ID: {extra[0]}")
 
 
+def _ref_id(ref: RefSnapshot) -> str:
+    identity = _sha256(_canonical_json(ref.to_dict()))
+    return f"REF:{ref.refname}@{identity}"
+
+
+def capture_ref_ids(snapshot: SnapshotManifest) -> tuple[str, ...]:
+    """Return identity-bearing IDs for every ref frozen by the snapshot."""
+    return tuple(_ref_id(ref) for ref in snapshot.observed_refs)
+
+
+def _snapshot_for_git_collection(snapshot: SnapshotManifest) -> SnapshotManifest:
+    revisions = {
+        value
+        for ref in snapshot.semantic_refs
+        for value in (ref.object_sha, ref.peeled_sha)
+        if value is not None
+    }
+    if snapshot.source_snapshot_head in revisions:
+        return snapshot
+    source_ref = RefSnapshot(
+        refname="refs/frozen/source-snapshot-head",
+        object_sha=snapshot.source_snapshot_head,
+        object_type="commit",
+        peeled_sha=None,
+        peeled_type=None,
+        symbolic_target=None,
+    )
+    return replace(
+        snapshot,
+        semantic_refs=tuple((*snapshot.semantic_refs, source_ref)),
+    )
+
+
+def enumerate_frozen_semantic_commits(
+    repo: str | Path, snapshot: SnapshotManifest
+) -> tuple[str, ...]:
+    """Enumerate commits from frozen semantic refs and source HEAD only."""
+    frozen = _snapshot_for_git_collection(snapshot)
+    revisions = {
+        value
+        for ref in frozen.semantic_refs
+        for value in (ref.object_sha, ref.peeled_sha)
+        if value is not None
+    }
+    revisions.add(snapshot.source_snapshot_head)
+    stdin = b"".join(value.encode("ascii") + b"\n" for value in sorted(revisions))
+    try:
+        output = subprocess.run(
+            ("git", "rev-list", "--stdin", "--topo-order"),
+            cwd=Path(repo),
+            input=stdin,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError, UnicodeEncodeError) as error:
+        raise CoverageError("frozen semantic Git universe is unavailable") from error
+    commits: list[str] = []
+    for raw in output.splitlines():
+        try:
+            sha = raw.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise CoverageError("frozen semantic Git commit ID is not ASCII") from error
+        if len(sha) != 40 or any(value not in "0123456789abcdef" for value in sha):
+            raise CoverageError(f"invalid frozen semantic Git commit ID: {sha}")
+        commits.append(sha)
+    if len(commits) != len(set(commits)):
+        raise CoverageError("duplicate frozen semantic Git commit ID")
+    excluded = set(snapshot.excluded_workflow_commit_shas_at_capture)
+    leaked = excluded.intersection(commits)
+    if leaked:
+        raise CoverageError(
+            f"excluded workflow commit entered semantic universe: {sorted(leaked)[0]}"
+        )
+    return tuple(commits)
+
+
 def _reject_external_originals(
     repo: Path,
     snapshot: SnapshotManifest,
@@ -191,34 +269,40 @@ def _reject_external_originals(
     staged_output_paths: tuple[str | Path, ...],
 ) -> None:
     root = repo.resolve(strict=True)
-    originals = {item.path: (root / item.path).resolve() for item in snapshot.external_input_files}
-    checked: list[tuple[str, Path]] = []
-    for path in archive_paths:
-        candidate = path if path.is_absolute() else root / path
-        checked.append((path.as_posix(), candidate.resolve()))
+    locked_paths = {
+        Path(item.path).as_posix().lstrip("./"): item
+        for item in snapshot.external_input_files
+    }
+    locked_basenames = {Path(path).name for path in locked_paths}
+    locked_hashes = {item.sha256: item.path for item in snapshot.external_input_files}
+
+    def reject_name(label: str) -> None:
+        member = label.split("#", 1)[-1].replace("\\", "/").lstrip("./")
+        if member in locked_paths or Path(member).name in locked_basenames:
+            raise CoverageError(f"external original path/basename is forbidden: {label}")
+
     for value in staged_output_paths:
-        path = Path(value)
+        reject_name(Path(value).as_posix())
+    for path in archive_paths:
+        reject_name(path.as_posix())
         candidate = path if path.is_absolute() else root / path
-        checked.append((path.as_posix(), candidate.resolve(strict=False)))
-    for label, candidate in checked:
-        for original_path, original in originals.items():
-            if candidate == original:
-                raise CoverageError(
-                    f"external original appears in archive/staged outputs: {original_path} ({label})"
-                )
-    original_names = set(originals)
+        if candidate.is_file() and tarfile.is_tarfile(candidate):
+            entries, _ = _archive_entries(candidate)
+            for locator, stored in entries.items():
+                reject_name(locator)
+                digest = _sha256(stored)
+                if digest in locked_hashes:
+                    raise CoverageError(
+                        f"external original identity hash is forbidden: {locked_hashes[digest]}"
+                    )
     for source in sources:
-        locators = [
-            source.raw_archive_locator or "",
-            *(member.locator for member in source.stored_members),
-        ]
-        for locator in locators:
-            archive_name = locator.split("#", 1)[0]
-            if archive_name in original_names or any(
-                archive_name.endswith("/" + value) for value in original_names
-            ):
+        if source.raw_archive_locator:
+            reject_name(source.raw_archive_locator)
+        for member in source.stored_members:
+            reject_name(member.locator)
+            if member.sha256 in locked_hashes:
                 raise CoverageError(
-                    f"external original appears in source archive locator: {archive_name}"
+                    f"external original identity hash is forbidden: {locked_hashes[member.sha256]}"
                 )
 
 
@@ -529,8 +613,23 @@ def _verify_git(
         expected_total = len(parents)
         if diff.payload.get("parent_total") != expected_total:
             raise CoverageError(f"Git diff parent count mismatch: {diff_id}")
-        if expected_total == 0 and diff.payload.get("parent_sha") is not None:
-            raise CoverageError(f"Git root diff comparison mismatch: {diff_id}")
+        if expected_total == 0:
+            expected_ordinal = 1
+            expected_parent = None
+            expected_base = EMPTY_TREE_SHA
+        else:
+            suffix = diff_id.rsplit("-P", 1)[-1]
+            expected_ordinal = int(suffix)
+            expected_parent = parents[expected_ordinal - 1]
+            expected_base = expected_parent
+        identity = (
+            diff.payload.get("parent_ordinal"),
+            diff.payload.get("parent_sha"),
+            diff.payload.get("comparison_base_sha"),
+        )
+        expected_identity = (expected_ordinal, expected_parent, expected_base)
+        if identity != expected_identity:
+            raise CoverageError(f"Git diff parent identity mismatch: {diff_id}")
     return (
         expected_commits,
         captured_commits,
@@ -694,12 +793,13 @@ def verify_source_capture(
     snapshot: SnapshotManifest,
     sources: Iterable[SourceRecord],
     claims: Iterable[DocumentClaim],
-    semantic_commit_shas: Iterable[str],
     captured_ref_ids: Iterable[str],
     archive_paths: Iterable[str | Path],
     staged_output_paths: Iterable[str | Path],
     require_archive_members: bool = True,
     strict_github_endpoints: bool = True,
+    expected_semantic_commit_shas: Iterable[str] | None = None,
+    locked_coverage: Mapping[str, object] | None = None,
 ) -> CaptureCoverageManifest:
     """Verify capture completeness without performing semantic classification."""
     repository = Path(repo).resolve(strict=True)
@@ -713,10 +813,14 @@ def verify_source_capture(
     if any(source.snapshot_id != snapshot.snapshot_id for source in frozen_sources):
         raise CoverageError("source record belongs to a different frozen snapshot")
     _reject_external_originals(repository, snapshot, frozen_sources, paths, staged)
-    expected_refs = tuple(f"REF:{item.refname}" for item in snapshot.observed_refs)
+    expected_refs = capture_ref_ids(snapshot)
     captured_refs = tuple(captured_ref_ids)
     _stable_set("Git refs", expected_refs, captured_refs)
-    semantic = tuple(semantic_commit_shas)
+    semantic = (
+        tuple(expected_semantic_commit_shas)
+        if expected_semantic_commit_shas is not None
+        else enumerate_frozen_semantic_commits(repository, snapshot)
+    )
     git_expected, git_captured, diff_expected, diff_captured = _verify_git(
         frozen_sources, semantic
     )
@@ -782,6 +886,25 @@ def verify_source_capture(
             github_detail, github_detail, unavailable
         ),
     }
+    if locked_coverage is not None:
+        if (
+            locked_coverage.get("phase") != "capture"
+            or locked_coverage.get("snapshot_id") != snapshot.snapshot_id
+        ):
+            raise CoverageError("locked capture coverage identity mismatch")
+        locked_sections = locked_coverage.get("sections")
+        if not isinstance(locked_sections, Mapping):
+            raise CoverageError("locked capture coverage sections are absent")
+        for key in ("refs", "git_commits"):
+            locked = locked_sections.get(key)
+            if not isinstance(locked, Mapping):
+                raise CoverageError(f"locked capture coverage section is absent: {key}")
+            current = sections[key].to_dict()
+            for field in ("expected_count", "expected_ids_sha256"):
+                if locked.get(field) != current[field]:
+                    raise CoverageError(
+                        f"locked capture expected universe mismatch: {key}.{field}"
+                    )
     return CaptureCoverageManifest(
         schema_version=1,
         phase="capture",
@@ -921,7 +1044,9 @@ def collect_all(
 
     # Ordering is intentional and all local enumeration comes only from the
     # already-frozen SnapshotManifest passed to each collector.
-    git_capture = collect_git_evidence(repository, snapshot)
+    git_capture = collect_git_evidence(
+        repository, _snapshot_for_git_collection(snapshot)
+    )
     git_archives = _write_git_archives(output, git_capture)
     document_sources, claims = collect_documents(repository, snapshot, output)
     ai_sources = tuple(collect_ai_traces(repository, snapshot, output))
@@ -969,8 +1094,7 @@ def collect_all(
         snapshot=final_snapshot,
         sources=sources,
         claims=claims,
-        semantic_commit_shas=git_capture.semantic_commit_shas,
-        captured_ref_ids=(f"REF:{item.refname}" for item in snapshot.observed_refs),
+        captured_ref_ids=capture_ref_ids(snapshot),
         archive_paths=archive_paths,
         staged_output_paths=staged_output_paths,
     )
@@ -1021,19 +1145,21 @@ def verify_capture_files(
             source_universe=sources,
         )
     )
-    semantic_commit_shas = tuple(
-        str(source.payload["commit_sha"])
-        for source in sources
-        if source.source_type == "git-commit"
-    )
+    coverage_path = output / COVERAGE_JSON_NAME
+    try:
+        locked_coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise CoverageError("locked capture coverage manifest is unreadable") from error
+    if not isinstance(locked_coverage, dict):
+        raise CoverageError("locked capture coverage manifest must be an object")
     archives = tuple(sorted(output.glob("*.tar.gz"), key=lambda path: _utf8(path.name)))
     return verify_source_capture(
         repo=repo,
         snapshot=snapshot,
         sources=sources,
         claims=claims,
-        semantic_commit_shas=semantic_commit_shas,
-        captured_ref_ids=(f"REF:{item.refname}" for item in snapshot.observed_refs),
+        captured_ref_ids=capture_ref_ids(snapshot),
         archive_paths=archives,
         staged_output_paths=staged_output_paths,
+        locked_coverage=locked_coverage,
     )

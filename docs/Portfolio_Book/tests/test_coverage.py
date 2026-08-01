@@ -4,17 +4,25 @@ import gzip
 import hashlib
 import io
 import json
+import subprocess
 import tarfile
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+import portfolio_builder.coverage as coverage_module
 from portfolio_builder.coverage import (
+    CaptureCoverageManifest,
+    CoverageSection,
     CoverageError,
+    capture_ref_ids,
+    collect_all,
     verify_archive_members,
     verify_source_capture,
 )
+from portfolio_builder.git_collector import GitCapture
+from portfolio_builder.github_collector import ReconciliationPass, ReconciliationResult
 from portfolio_builder.models import (
     DocumentClaim,
     ExplicitRelation,
@@ -169,6 +177,16 @@ def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
             payload={"diff_sha256": diff_hash, "stable_run_id": "RUN-2026-08-01-001"},
         ),
         _source(
+            "RUN-CROSS-FIELD",
+            "ai-trace-entry",
+            payload={"execution_id": "RUN-2026-08-01-001"},
+        ),
+        _source(
+            "DIRECT-REF",
+            "ai-trace-entry",
+            payload={"source_reference": "AI-1"},
+        ),
+        _source(
             "NO-GUESS",
             "ai-trace-entry",
             payload={
@@ -210,6 +228,36 @@ def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
     assert all(item.relation.target_source_id != "NO-GUESS" for item in first)
     assert all(item.owner_source_id != "NO-GUESS-2" for item in first)
     assert all(item.relation.target_source_id != "NO-GUESS-2" for item in first)
+    assert any(
+        item.owner_source_id == "RUN-CROSS-FIELD"
+        and item.relation.relation_type == "same-execution"
+        for item in first
+    )
+    assert any(
+        item.owner_source_id == "DIRECT-REF"
+        and item.relation.target_source_id == "AI-1"
+        and item.relation.relation_type == "same-execution"
+        for item in first
+    )
+
+
+def test_direct_execution_reference_rejects_missing_target():
+    with pytest.raises(ValueError, match="direct execution/source reference.*MISSING"):
+        derive_explicit_relations(
+            (_source("OWNER", "ai-trace-entry", payload={"source_reference": "MISSING"}),)
+        )
+    with pytest.raises(ValueError, match="direct execution/source reference.*ambiguous"):
+        derive_explicit_relations(
+            (
+                _source(
+                    "OWNER",
+                    "ai-trace-entry",
+                    payload={"source_reference": "fixture:shared"},
+                ),
+                _source("TARGET-A", "ai-trace-entry", locator="fixture:shared"),
+                _source("TARGET-B", "tracked-document", locator="fixture:shared"),
+            )
+        )
 
 
 def test_relation_ledger_rejects_collision_absent_target_and_unresolved_downstream():
@@ -267,6 +315,72 @@ def test_archive_verification_rejects_missing_reordered_corrupt_and_external_ori
         verify_archive_members((replace(source, stored_members=(broken, members[1])),), (tmp_path / filename,))
 
 
+def test_external_original_is_rejected_by_full_member_name_basename_and_identity(tmp_path: Path):
+    snapshot, external_path = _snapshot(tmp_path)
+    original = snapshot.external_input_files[0]
+    value = b"safe-derived"
+    disguised = StoredArtifactMember(
+        "S-part-001",
+        "safe.tar.gz#docs/Portfolio_Book/resume.pdf",
+        1,
+        1,
+        len(value),
+        _hash(value),
+    )
+    source = _source("S", "fixture", stored_hash=_hash(value), members=(disguised,))
+    with pytest.raises(CoverageError, match="external original.*resume.pdf"):
+        verify_source_capture(
+            repo=tmp_path,
+            snapshot=snapshot,
+            sources=(source,),
+            claims=(),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
+            archive_paths=(),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+        )
+
+    hash_disguised = replace(
+        disguised,
+        locator="safe.tar.gz#records/derived.bin",
+        sha256=original.sha256,
+    )
+    with pytest.raises(CoverageError, match="external original identity hash"):
+        verify_source_capture(
+            repo=tmp_path,
+            snapshot=snapshot,
+            sources=(replace(source, stored_members=(hash_disguised,)),),
+            claims=(),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
+            archive_paths=(),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+        )
+    archive = tmp_path / "safe.tar.gz"
+    with tarfile.open(archive, "w:gz") as stream:
+        info = tarfile.TarInfo("nested/resume.pdf")
+        info.size = len(value)
+        stream.addfile(info, io.BytesIO(value))
+    with pytest.raises(CoverageError, match="external original path/basename"):
+        verify_source_capture(
+            repo=tmp_path,
+            snapshot=snapshot,
+            sources=(),
+            claims=(),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
+            archive_paths=(archive,),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+        )
+    assert external_path.is_file()
+
+
 def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unavailable_complete(tmp_path: Path):
     snapshot, _ = _snapshot(tmp_path)
     sha = "a" * 40
@@ -309,11 +423,17 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
     )
     sources = (
         _source(f"GIT-{sha}", "git-commit", payload={"commit_sha": sha, "parent_shas": []}),
-        _source(
-            f"GIT-{sha}-ROOT",
-            "git-diff",
-            payload={"child_sha": sha, "parent_sha": None, "parent_total": 0, "parent_ordinal": 1},
-        ),
+            _source(
+                f"GIT-{sha}-ROOT",
+                "git-diff",
+                payload={
+                    "child_sha": sha,
+                    "parent_sha": None,
+                    "comparison_base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                    "parent_total": 0,
+                    "parent_ordinal": 1,
+                },
+            ),
         document,
         pdf,
         ai_file,
@@ -346,8 +466,8 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
         snapshot=snapshot,
         sources=sources,
         claims=claims,
-        semantic_commit_shas=(sha,),
-        captured_ref_ids=("REF:refs/heads/main",),
+        expected_semantic_commit_shas=(sha,),
+        captured_ref_ids=capture_ref_ids(snapshot),
         archive_paths=(),
         staged_output_paths=(),
         require_archive_members=False,
@@ -360,7 +480,7 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
     def verify_mutation(
         mutated_sources=sources,
         mutated_claims=claims,
-        refs=("REF:refs/heads/main",),
+        refs=capture_ref_ids(snapshot),
         mutated_snapshot=snapshot,
     ):
         return verify_source_capture(
@@ -368,7 +488,7 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
             snapshot=mutated_snapshot,
             sources=mutated_sources,
             claims=mutated_claims,
-            semantic_commit_shas=(sha,),
+            expected_semantic_commit_shas=(sha,),
             captured_ref_ids=refs,
             archive_paths=(),
             staged_output_paths=(),
@@ -400,31 +520,16 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
         verify_mutation(mutated_snapshot=replace(snapshot, github_window=changed_window))
 
     with pytest.raises(CoverageError, match="missing stable ID.*GIT-.*-ROOT"):
-        verify_source_capture(
-            repo=tmp_path,
-            snapshot=snapshot,
-            sources=tuple(item for item in sources if not item.source_id.endswith("-ROOT")),
-            claims=claims,
-            semantic_commit_shas=(sha,),
-            captured_ref_ids=("REF:refs/heads/main",),
-            archive_paths=(),
-            staged_output_paths=(),
-            require_archive_members=False,
-            strict_github_endpoints=False,
+        verify_mutation(
+            tuple(item for item in sources if not item.source_id.endswith("-ROOT"))
         )
     transient = replace(github_child, availability_status="transient-failure")
     with pytest.raises(CoverageError, match="transient failure.*GH-CHILD"):
-        verify_source_capture(
-            repo=tmp_path,
-            snapshot=snapshot,
-            sources=tuple(transient if item.source_id == "GH-CHILD" else item for item in sources),
-            claims=claims,
-            semantic_commit_shas=(sha,),
-            captured_ref_ids=("REF:refs/heads/main",),
-            archive_paths=(),
-            staged_output_paths=(),
-            require_archive_members=False,
-            strict_github_endpoints=False,
+        verify_mutation(
+            tuple(
+                transient if item.source_id == "GH-CHILD" else item
+                for item in sources
+            )
         )
     terminal = replace(
         github_child,
@@ -446,19 +551,247 @@ def test_capture_coverage_names_missing_stable_ids_and_treats_only_terminal_unav
             ),
         ),
     )
-    verify_source_capture(
-        repo=tmp_path,
-        snapshot=terminal_snapshot,
-        sources=tuple(terminal if item.source_id == "GH-CHILD" else item for item in sources),
-        claims=claims,
-        semantic_commit_shas=(sha,),
-        captured_ref_ids=("REF:refs/heads/main",),
+    verify_mutation(
+        tuple(terminal if item.source_id == "GH-CHILD" else item for item in sources),
+        mutated_snapshot=terminal_snapshot,
+        refs=capture_ref_ids(terminal_snapshot),
+    )
+
+
+def test_parent_diff_identity_is_exact_for_two_parent_commit(tmp_path: Path):
+    snapshot, _ = _snapshot(tmp_path)
+    child = "1" * 40
+    parents = ["2" * 40, "3" * 40]
+    commits = tuple(
+        _source(
+            f"GIT-{sha}",
+            "git-commit",
+            payload={"commit_sha": sha, "parent_shas": []},
+        )
+        for sha in parents
+    ) + (
+        _source(
+            f"GIT-{child}",
+            "git-commit",
+            payload={"commit_sha": child, "parent_shas": parents},
+        ),
+    )
+    root_diffs = tuple(
+        _source(
+            f"GIT-{sha}-ROOT",
+            "git-diff",
+            payload={
+                "child_sha": sha,
+                "parent_sha": None,
+                "comparison_base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                "parent_total": 0,
+                "parent_ordinal": 1,
+            },
+        )
+        for sha in parents
+    )
+    merge_diffs = tuple(
+        _source(
+            f"GIT-{child}-P{ordinal:02d}",
+            "git-diff",
+            payload={
+                "child_sha": child,
+                "parent_sha": parent,
+                "comparison_base_sha": parent,
+                "parent_total": 2,
+                "parent_ordinal": ordinal,
+            },
+        )
+        for ordinal, parent in enumerate(parents, start=1)
+    )
+    sources = commits + root_diffs + merge_diffs
+    # Exercise only the Git verifier through the public gate's internal helper.
+    coverage_module._verify_git(sources, (*parents, child))
+    wrong = replace(
+        merge_diffs[1],
+        payload={**merge_diffs[1].payload, "parent_sha": parents[0]},
+    )
+    with pytest.raises(CoverageError, match="parent identity mismatch.*P02"):
+        coverage_module._verify_git(commits + root_diffs + (merge_diffs[0], wrong), (*parents, child))
+
+
+def test_independent_frozen_git_universe_detects_missing_commit_and_ref_corruption(
+    tmp_path: Path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ("git", *args),
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init", "-b", "main")
+    git("config", "user.name", "Coverage Test")
+    git("config", "user.email", "coverage@example.invalid")
+    (repo / "a.txt").write_text("root\n", encoding="utf-8")
+    git("add", "a.txt")
+    git("commit", "-m", "root")
+    root = git("rev-parse", "HEAD")
+    (repo / "a.txt").write_text("next\n", encoding="utf-8")
+    git("commit", "-am", "next")
+    head = git("rev-parse", "HEAD")
+    ref = RefSnapshot("refs/heads/main", head, "commit", None, None, None)
+    snapshot = SnapshotManifest(
+        snapshot_id="SNAP-test",
+        started_at="s",
+        local_completed_at="l",
+        finalized_at="f",
+        source_boundary_sha256="0" * 64,
+        source_snapshot_head=head,
+        source_snapshot_tree=git("rev-parse", f"{head}^{{tree}}"),
+        first_excluded_commit="f" * 40,
+        first_excluded_parent=head,
+        workflow_ref="refs/heads/docs/test",
+        observed_head_sha=head,
+        observed_head_symbolic_target="refs/heads/main",
+        observed_refs=(ref,),
+        semantic_refs=(ref,),
+        excluded_workflow_commit_shas_at_capture=(),
+        external_input_files=(),
+        legacy_owned_outputs=(),
+        tracked_files=(),
+        ai_trace_files=(),
+        github_window=GitHubSnapshotWindow("s", "e", "r", (), (), {}, ()),
+    )
+    sources = (
+        _source(f"GIT-{root}", "git-commit", payload={"commit_sha": root, "parent_shas": []}),
+        _source(
+            f"GIT-{root}-ROOT",
+            "git-diff",
+            payload={
+                "child_sha": root,
+                "parent_sha": None,
+                "comparison_base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                "parent_total": 0,
+                "parent_ordinal": 1,
+            },
+        ),
+        _source(f"GIT-{head}", "git-commit", payload={"commit_sha": head, "parent_shas": [root]}),
+        _source(
+            f"GIT-{head}-P01",
+            "git-diff",
+            payload={
+                "child_sha": head,
+                "parent_sha": root,
+                "comparison_base_sha": root,
+                "parent_total": 1,
+                "parent_ordinal": 1,
+            },
+        ),
+    )
+    manifest = verify_source_capture(
+        repo=repo,
+        snapshot=snapshot,
+        sources=sources,
+        claims=(),
+        captured_ref_ids=capture_ref_ids(snapshot),
         archive_paths=(),
         staged_output_paths=(),
         require_archive_members=False,
         strict_github_endpoints=False,
     )
+    with pytest.raises(CoverageError, match=f"Git commits.*GIT-{head}"):
+        verify_source_capture(
+            repo=repo,
+            snapshot=snapshot,
+            sources=sources[:2],
+            claims=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
+            archive_paths=(),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+        )
+    corrupted = replace(
+        snapshot,
+        observed_refs=(replace(ref, object_sha=root),),
+    )
+    with pytest.raises(CoverageError, match="locked capture expected universe mismatch: refs"):
+        verify_source_capture(
+            repo=repo,
+            snapshot=corrupted,
+            sources=sources,
+            claims=(),
+            captured_ref_ids=capture_ref_ids(corrupted),
+            archive_paths=(),
+            staged_output_paths=(),
+            require_archive_members=False,
+            strict_github_endpoints=False,
+            locked_coverage=manifest.to_dict(),
+        )
 
+
+def test_collect_all_uses_existing_snapshot_orders_stages_and_finalizes_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    snapshot, _ = _snapshot(tmp_path)
+    snapshot = replace(snapshot, finalized_at=None, github_window=None)
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(json.dumps(snapshot.to_dict()), encoding="utf-8")
+    order: list[str] = []
+    git_capture = GitCapture((), (), (), (), (), ())
+    window = GitHubSnapshotWindow(
+        "s", "e", "r", (), (), {}, ()
+    )
+    github = ReconciliationResult((), window, (ReconciliationPass(0, (), ()),), ())
+    section = CoverageSection.complete((), ())
+    manifest = CaptureCoverageManifest(1, "capture", "complete", snapshot.snapshot_id, 0, 0, 0, 0, {"refs": section}, ())
+
+    monkeypatch.setattr(coverage_module, "capture_local_snapshot", lambda *args: (_ for _ in ()).throw(AssertionError("recaptured")))
+    monkeypatch.setattr(coverage_module, "collect_git_evidence", lambda *args: order.append("git") or git_capture)
+    monkeypatch.setattr(coverage_module, "_write_git_archives", lambda *args: ())
+    monkeypatch.setattr(coverage_module, "collect_documents", lambda *args: order.append("documents") or ([], []))
+
+    def ai(*args):
+        order.append("ai")
+        return iter(())
+
+    monkeypatch.setattr(coverage_module, "collect_ai_traces", ai)
+    monkeypatch.setattr(coverage_module, "reconcile_github", lambda **kwargs: order.append("github") or github)
+    monkeypatch.setattr(coverage_module, "derive_explicit_relations", lambda sources: order.append("relations") or ())
+    monkeypatch.setattr(coverage_module, "attach_explicit_relations", lambda sources, relations: tuple(sources))
+    monkeypatch.setattr(coverage_module, "verify_source_capture", lambda **kwargs: order.append("coverage") or manifest)
+    monkeypatch.setattr(coverage_module, "write_jsonl", lambda *args, **kwargs: order.append("jsonl"))
+    monkeypatch.setattr(coverage_module, "_write_commit_csv", lambda *args: order.append("csv"))
+    monkeypatch.setattr(coverage_module, "_specialized_inventory", lambda *args: order.append("inventory"))
+    monkeypatch.setattr(coverage_module, "write_coverage_manifest", lambda *args: order.append("coverage-write") or ())
+    monkeypatch.setattr(coverage_module, "write_snapshot_manifest", lambda *args: order.append("finalize"))
+
+    collect_all(
+        repo=tmp_path,
+        snapshot_path=snapshot_path,
+        output_dir=tmp_path / "out",
+        github_client=object(),  # type: ignore[arg-type]
+        finalized_at="2026-08-01T00:00:03Z",
+    )
+    assert order[:6] == ["git", "documents", "ai", "github", "relations", "coverage"]
+    assert order[-1] == "finalize"
+
+    order.clear()
+    monkeypatch.setattr(
+        coverage_module,
+        "verify_source_capture",
+        lambda **kwargs: (_ for _ in ()).throw(CoverageError("stop")),
+    )
+    with pytest.raises(CoverageError, match="stop"):
+        collect_all(
+            repo=tmp_path,
+            snapshot_path=snapshot_path,
+            output_dir=tmp_path / "out",
+            github_client=object(),  # type: ignore[arg-type]
+            finalized_at="2026-08-01T00:00:03Z",
+        )
+    assert "finalize" not in order
 
 def test_external_identity_and_original_path_are_enforced(tmp_path: Path):
     snapshot, external_path = _snapshot(tmp_path)
@@ -469,8 +802,8 @@ def test_external_identity_and_original_path_are_enforced(tmp_path: Path):
             snapshot=snapshot,
             sources=(),
             claims=(),
-            semantic_commit_shas=(),
-            captured_ref_ids=("REF:refs/heads/main",),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
             archive_paths=(),
             staged_output_paths=(),
             require_archive_members=False,
@@ -484,8 +817,8 @@ def test_external_identity_and_original_path_are_enforced(tmp_path: Path):
             snapshot=snapshot,
             sources=(),
             claims=(),
-            semantic_commit_shas=(),
-            captured_ref_ids=("REF:refs/heads/main",),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
             archive_paths=(external_path,),
             staged_output_paths=(),
             require_archive_members=False,
@@ -497,8 +830,8 @@ def test_external_identity_and_original_path_are_enforced(tmp_path: Path):
             snapshot=snapshot,
             sources=(),
             claims=(),
-            semantic_commit_shas=(),
-            captured_ref_ids=("REF:refs/heads/main",),
+            expected_semantic_commit_shas=(),
+            captured_ref_ids=capture_ref_ids(snapshot),
             archive_paths=(),
             staged_output_paths=("private/resume.pdf",),
             require_archive_members=False,

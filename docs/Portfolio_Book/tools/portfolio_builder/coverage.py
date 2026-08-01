@@ -22,7 +22,7 @@ from .ai_trace_collector import collect_ai_traces
 from .canonical_io import read_jsonl, write_jsonl
 from .document_collector import collect_documents
 from .git_collector import EMPTY_TREE_SHA, GitCapture, collect_git_evidence
-from .github_client import CheckpointStore, GitHubClient
+from .github_client import CheckpointStore, GitHubClient, is_exact_patch_variant
 from .github_collector import REPOSITORY, ReconciliationResult, reconcile_github
 from .models import (
     DocumentClaim,
@@ -803,6 +803,13 @@ def _fingerprint_child(
         if prefix != "status-code" or not separator or not raw_status.isdigit():
             raise CoverageError(
                 f"GitHub unavailable fingerprint metadata mismatch: {fingerprint.item_key}|{token}"
+            )
+        exact_patch_406 = is_exact_patch_variant(
+            fingerprint.endpoint_key, {}, pages[0], fingerprint.accept
+        ) and fingerprint.request_params_sha256 == _sha256(_canonical_json({}))
+        if raw_status == "406" and not exact_patch_406:
+            raise CoverageError(
+                f"GitHub 406 availability is not a patch variant: {fingerprint.item_key}|{fingerprint.endpoint_key}"
             )
         locator = f"github:{fingerprint.endpoint_key}"
         matches = [

@@ -592,6 +592,49 @@ def test_confirmed_unavailable_fingerprint_validates_metadata_record_contract():
         coverage_module._fingerprint_child(fingerprint, (bad_hash,))
 
 
+def test_patch_406_coverage_is_terminal_but_json_406_is_rejected():
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/241.patch"
+    body = b'{"message":"unsafe"}'
+    page = GitHubPage(
+        endpoint=endpoint,
+        params={},
+        page_number=1,
+        body=body,
+        json=None,
+        response_hash=_hash(body),
+        availability_status="confirmed-unavailable",
+        status_code=406,
+        fetched_at="2026-08-01T00:00:00Z",
+    )
+    safe = github_collector._availability_record(
+        item_key="pull:241",
+        endpoint=endpoint,
+        snapshot_id="SNAP-test",
+        page=page,
+        params={},
+        accept=github_collector.PATCH_ACCEPT,
+    )
+    fingerprint = github_collector._fingerprint(
+        item_key="pull:241",
+        endpoint=endpoint,
+        params={},
+        accept=github_collector.PATCH_ACCEPT,
+        pages=(page,),
+    )
+
+    assert coverage_module._fingerprint_child(fingerprint, (safe.record,)) == (
+        "pull:241|status-code:406",
+    )
+
+    json_fingerprint = replace(fingerprint, accept="application/vnd.github+json")
+    json_record = replace(
+        safe.record,
+        payload={**safe.record.payload, "accept": "application/vnd.github+json"},
+    )
+    with pytest.raises(CoverageError, match="406 availability is not a patch variant"):
+        coverage_module._fingerprint_child(json_fingerprint, (json_record,))
+
+
 def test_confirmed_unavailable_fingerprint_rejects_coherently_reidentified_archive(
     tmp_path: Path,
 ):

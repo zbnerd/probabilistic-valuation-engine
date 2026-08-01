@@ -7,6 +7,7 @@ import pytest
 
 from portfolio_builder.github_client import GitHubClientError, GitHubPage
 from portfolio_builder.github_collector import (
+    PATCH_ACCEPT,
     collect_issues,
     collect_pull_requests,
     reconcile_github,
@@ -415,6 +416,58 @@ def test_final_unavailable_child_is_a_separate_availability_record(tmp_path):
     assert "status-code:451" in fingerprint.stable_child_ids
     with tarfile.open(result.archive_paths[0], "r:gz") as archive:
         assert unavailable_page.body not in b"".join(
+            archive.extractfile(member).read()
+            for member in archive.getmembers()
+            if member.isfile()
+        )
+
+
+def test_live_pr_patch_406_becomes_terminal_availability_without_archiving_body(
+    tmp_path,
+):
+    base = "/repos/zbnerd/probabilistic-valuation-engine"
+    patch_endpoint = f"{base}/pulls/241.patch"
+    pages = {
+        f"{base}/pulls": (
+            _page(f"{base}/pulls", [{"number": 241, "updated_at": "u"}]),
+        ),
+        **_pr_pages(241, updated_at="u"),
+    }
+    unsafe_body = b'{"message":"unsafe live 406 body"}'
+    patch_page = _unavailable(patch_endpoint, 406, unsafe_body)
+
+    result = collect_pull_requests(
+        StaticClient(pages, {patch_endpoint: patch_page}),
+        "zbnerd/probabilistic-valuation-engine",
+        "snap",
+        tmp_path,
+    )
+
+    record = next(
+        value for value in result.records if value.source_type == "github-availability"
+    )
+    fingerprint = next(
+        value
+        for value in result.endpoint_fingerprints
+        if value.endpoint_key == patch_endpoint
+    )
+    assert record.payload == {
+        "accept": PATCH_ACCEPT,
+        "availability_status": "confirmed-unavailable",
+        "confirmed_at": patch_page.fetched_at,
+        "endpoint": patch_endpoint,
+        "observed_body_sha256": patch_page.response_hash,
+        "request_params": {},
+        "status_code": 406,
+        "fetched_at": patch_page.fetched_at,
+        "captured_updated_at": None,
+        "response_raw_sha256": patch_page.response_hash,
+    }
+    assert fingerprint.availability_status == "confirmed-unavailable"
+    assert fingerprint.accept == PATCH_ACCEPT
+    assert fingerprint.stable_child_ids == ("status-code:406",)
+    with tarfile.open(result.archive_paths[0], "r:gz") as archive:
+        assert unsafe_body not in b"".join(
             archive.extractfile(member).read()
             for member in archive.getmembers()
             if member.isfile()

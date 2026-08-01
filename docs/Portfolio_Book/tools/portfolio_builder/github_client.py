@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -19,6 +20,7 @@ from typing import Mapping, Protocol
 
 API_ROOT = "https://api.github.com"
 DEFAULT_ACCEPT = "application/vnd.github+json"
+PATCH_ACCEPT = "application/vnd.github.patch"
 API_VERSION = "2022-11-28"
 MAX_ATTEMPTS = 3
 
@@ -86,6 +88,7 @@ class RateLimitState:
 
 @dataclass(frozen=True, slots=True)
 class Checkpoint:
+    accept: str
     endpoint: str
     params: dict[str, object]
     etag: str | None
@@ -130,6 +133,22 @@ def _integer_header(headers: Mapping[str, str], name: str) -> int | None:
         return None
 
 
+def is_exact_patch_variant(
+    endpoint: str,
+    params: Mapping[str, object],
+    page_number: int,
+    accept: str,
+) -> bool:
+    """Identify the sole request variant where GitHub 406 is terminal evidence."""
+    return (
+        accept == PATCH_ACCEPT
+        and not params
+        and page_number == 1
+        and re.fullmatch(r"/repos/[^/]+/[^/]+/pulls/[0-9]+\.patch", endpoint)
+        is not None
+    )
+
+
 class CheckpointStore:
     """Deterministic checkpoint metadata plus a hash-verified local body cache."""
 
@@ -166,6 +185,13 @@ class CheckpointStore:
         if not path.is_file():
             return None
         payload = json.loads(path.read_text(encoding="utf-8"))
+        stored_accept = payload.get("accept")
+        if stored_accept is None:
+            payload["accept"] = accept
+        elif stored_accept != accept:
+            raise GitHubClientError(
+                f"checkpoint accept mismatch: endpoint={endpoint}"
+            )
         if "status_code" not in payload:
             if payload.get("availability_status") != "available":
                 raise GitHubClientError(
@@ -371,7 +397,7 @@ class GitHubClient:
                 )
             if response.status == 200:
                 checkpoint = self._checkpoint(
-                    endpoint, params, page_number, response, "available"
+                    endpoint, params, page_number, accept, response, "available"
                 )
                 next_url = _next_link(response.headers)
                 self._checkpoints.save(
@@ -381,9 +407,19 @@ class GitHubClient:
                     self._page(checkpoint, response.body, parse_json=parse_json),
                     next_url,
                 )
-            if response.status in (404, 410, 451):
+            patch_variant_406 = (
+                response.status == 406
+                and not parse_json
+                and is_exact_patch_variant(endpoint, params, page_number, accept)
+            )
+            if response.status in (404, 410, 451) or patch_variant_406:
                 checkpoint = self._checkpoint(
-                    endpoint, params, page_number, response, "confirmed-unavailable"
+                    endpoint,
+                    params,
+                    page_number,
+                    accept,
+                    response,
+                    "confirmed-unavailable",
                 )
                 self._checkpoints.save(checkpoint, response.body, accept)
                 return self._page(checkpoint, response.body, parse_json=False), None
@@ -412,10 +448,12 @@ class GitHubClient:
         endpoint: str,
         params: dict[str, object],
         page_number: int,
+        accept: str,
         response: HttpResponse,
         availability_status: str,
     ) -> Checkpoint:
         return Checkpoint(
+            accept=accept,
             endpoint=endpoint,
             params=params,
             etag=_header(response.headers, "ETag"),

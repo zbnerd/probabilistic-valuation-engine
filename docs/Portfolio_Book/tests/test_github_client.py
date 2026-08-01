@@ -11,6 +11,7 @@ from portfolio_builder.github_client import (
     GitHubClientError,
     HttpResponse,
 )
+from portfolio_builder.github_collector import PATCH_ACCEPT
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "github"
@@ -79,6 +80,7 @@ def test_link_pagination_uses_exact_api_headers_and_persists_checkpoints(tmp_pat
     assert len(checkpoints) == 2
     saved = json.loads(checkpoints[0].read_text(encoding="utf-8"))
     assert set(saved) == {
+        "accept",
         "availability_status",
         "endpoint",
         "etag",
@@ -227,6 +229,72 @@ def test_terminal_unavailable_bytes_observation_is_not_collapsed(tmp_path):
     assert page.status_code == 410
     assert page.response_hash == hashlib.sha256(body).hexdigest()
     assert page.fetched_at == "2023-11-14T22:13:20Z"
+
+
+def test_live_pr_patch_406_is_terminal_only_for_exact_patch_variant(tmp_path):
+    body = b'{"message":"unsafe patch diagnostic"}'
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/241.patch"
+    client, _ = make_client(tmp_path, [response(406, body)])
+
+    page = client.get_bytes_page(endpoint, accept=PATCH_ACCEPT)
+
+    assert page.availability_status == "confirmed-unavailable"
+    assert page.status_code == 406
+    assert page.response_hash == hashlib.sha256(body).hexdigest()
+    assert page.fetched_at == "2023-11-14T22:13:20Z"
+    checkpoint = json.loads(
+        next((tmp_path / "checkpoints").glob("*.json")).read_text(encoding="utf-8")
+    )
+    assert checkpoint["endpoint"] == endpoint
+    assert checkpoint["params"] == {}
+    assert checkpoint["accept"] == PATCH_ACCEPT
+    assert checkpoint["status_code"] == 406
+    assert checkpoint["response_hash"] == hashlib.sha256(body).hexdigest()
+    assert checkpoint["fetched_at"] == "2023-11-14T22:13:20Z"
+
+
+@pytest.mark.parametrize(
+    ("request_kind", "accept"),
+    [
+        ("json", "application/vnd.github+json"),
+        ("bytes", "application/vnd.github+json"),
+        ("pages", PATCH_ACCEPT),
+    ],
+)
+def test_406_remains_an_error_for_json_wrong_accept_or_paginated_requests(
+    tmp_path, request_kind, accept
+):
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/241.patch"
+    client, _ = make_client(tmp_path, [response(406, b"do-not-publish")])
+
+    with pytest.raises(GitHubClientError, match="status=406"):
+        if request_kind == "json":
+            client.get_json("/repos/zbnerd/probabilistic-valuation-engine/pulls/241")
+        elif request_kind == "bytes":
+            client.get_bytes_page(endpoint, accept=accept)
+        else:
+            client.get_pages(endpoint, accept=accept)
+
+    assert not tuple((tmp_path / "checkpoints").glob("*"))
+
+
+def test_406_after_available_paginated_content_still_blocks(tmp_path):
+    endpoint = "/repos/zbnerd/probabilistic-valuation-engine/pulls/241.patch"
+    next_url = "https://api.github.com" + endpoint + "?page=2"
+    client, _ = make_client(
+        tmp_path,
+        [
+            response(200, b"[]", Link=f'<{next_url}>; rel="next"'),
+            response(406, b"do-not-publish"),
+        ],
+    )
+
+    with pytest.raises(GitHubClientError, match="status=406"):
+        client.get_pages(endpoint, accept=PATCH_ACCEPT)
+
+    checkpoints = tuple((tmp_path / "checkpoints").glob("*.json"))
+    assert len(checkpoints) == 1
+    assert json.loads(checkpoints[0].read_text(encoding="utf-8"))["status_code"] == 200
 
 
 def test_environment_token_precedes_gh_fallback_and_neither_is_exposed(

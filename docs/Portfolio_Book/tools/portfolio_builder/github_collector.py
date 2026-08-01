@@ -12,7 +12,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
-from .github_client import DEFAULT_ACCEPT, GitHubClient, GitHubClientError, GitHubPage
+from .github_client import (
+    DEFAULT_ACCEPT,
+    PATCH_ACCEPT,
+    GitHubClient,
+    GitHubClientError,
+    GitHubPage,
+)
 from .models import (
     GitHubEndpointFingerprint,
     GitHubSnapshotWindow,
@@ -22,7 +28,6 @@ from .models import (
 from .redaction import redact_text
 
 
-PATCH_ACCEPT = "application/vnd.github.patch"
 PER_PAGE = 100
 REPOSITORY = "zbnerd/probabilistic-valuation-engine"
 COUNT_GAP_REASON = "parent-reported count exceeds accessible endpoint enumeration"

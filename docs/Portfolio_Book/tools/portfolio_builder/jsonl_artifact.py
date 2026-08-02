@@ -216,20 +216,28 @@ def _error(target: Path, invariant: str) -> JsonlArtifactError:
     return JsonlArtifactError(f"{target}: {invariant}")
 
 
-def _identity_from_line(target: Path, line: bytes) -> str:
+def _line_error(target: Path, line_number: int | None, invariant: str) -> JsonlArtifactError:
+    if line_number is None:
+        return _error(target, invariant)
+    return JsonlArtifactError(f"{target}:{line_number}: {invariant}")
+
+
+def _identity_from_line(
+    target: Path, line: bytes, line_number: int | None = None
+) -> str:
     if not line.endswith(b"\n") or b"\n" in line[:-1]:
-        raise _error(target, "canonical line must end in exactly one LF")
+        raise _line_error(target, line_number, "canonical line must end in exactly one LF")
     try:
         value = json.loads(line)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise _error(target, "record must be JSON") from error
+        raise _line_error(target, line_number, "record must be JSON") from error
     if not isinstance(value, dict):
-        raise _error(target, "record must be an object")
+        raise _line_error(target, line_number, "record must be an object")
     for field in _IDENTITY_FIELDS:
         identity = value.get(field)
         if isinstance(identity, str) and identity:
             return identity
-    raise _error(target, "record has no stable identity")
+    raise _line_error(target, line_number, "record has no stable identity")
 
 
 def _validate_record(identity: str, line: bytes, seen: set[str], target: Path) -> None:
@@ -702,7 +710,10 @@ def _indexed_pass(target: Path, shards: tuple[JsonlShardDescriptor, ...], payloa
             raise _error(target, "uncompressed SHA-256")
         if len(lines) != shard.record_count:
             raise _error(target, "shard record count")
-        identities = [_identity_from_line(target, line) for line in lines]
+        identities = [
+            _identity_from_line(physical, line, number)
+            for number, line in enumerate(lines, start=1)
+        ]
         if identities[0] != shard.first_identity or identities[-1] != shard.last_identity:
             raise _error(target, "shard stable identity boundary")
         for number, (identity, line) in enumerate(zip(identities, lines, strict=True), start=1):
@@ -728,7 +739,7 @@ def _plain_pass(target: Path, raw: bytes, consume: Callable[[Path, int, bytes], 
     seen: set[str] = set()
     lines = raw.splitlines(keepends=True)
     for number, line in enumerate(lines, start=1):
-        identity = _identity_from_line(target, line)
+        identity = _identity_from_line(target, line, number)
         if identity in seen:
             raise _error(target, "duplicate stable identity")
         seen.add(identity)

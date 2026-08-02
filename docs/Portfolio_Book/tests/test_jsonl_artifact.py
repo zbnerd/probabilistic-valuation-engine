@@ -105,6 +105,25 @@ def _make_two_shard_artifact(tmp_path: Path) -> Path:
     return target
 
 
+def _replace_first_shard_bytes(target: Path, raw: bytes) -> Path:
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    first_descriptor = payload["shards"][0]
+    physical = target.parent / first_descriptor["path"]
+    destination = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", mode="wb", compresslevel=9, fileobj=destination, mtime=0
+    ) as stream:
+        stream.write(raw)
+    compressed = destination.getvalue()
+    physical.write_bytes(compressed)
+    first_descriptor["compressed_byte_count"] = len(compressed)
+    first_descriptor["compressed_sha256"] = hashlib.sha256(compressed).hexdigest()
+    first_descriptor["uncompressed_byte_count"] = len(raw)
+    first_descriptor["uncompressed_sha256"] = hashlib.sha256(raw).hexdigest()
+    _write_index(target, payload)
+    return physical
+
+
 def _write_index(target: Path, payload: dict[str, object]) -> None:
     target.write_bytes(
         json.dumps(
@@ -112,6 +131,23 @@ def _write_index(target: Path, payload: dict[str, object]) -> None:
         ).encode("utf-8")
         + b"\n"
     )
+
+
+@pytest.mark.parametrize("storage_mode", ["plain", "sharded"])
+def test_malformed_json_reports_actual_physical_path_and_local_line(
+    tmp_path: Path, storage_mode: str
+):
+    malformed = b'{"source_id":"source-a"\n'
+    if storage_mode == "plain":
+        target = tmp_path / "records.jsonl"
+        target.write_bytes(malformed)
+        physical = target
+    else:
+        target = _make_two_shard_artifact(tmp_path)
+        physical = _replace_first_shard_bytes(target, malformed)
+
+    with pytest.raises(JsonlArtifactError, match=rf"{physical}:1: record must be JSON"):
+        _read(target)
 
 
 def _mutate_artifact(target: Path, mutation: str) -> None:

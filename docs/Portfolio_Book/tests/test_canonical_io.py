@@ -83,6 +83,18 @@ def _canonical_bytes(record):
     ).encode("utf-8") + b"\n"
 
 
+def _whitespace_formatted_bytes(record):
+    return json.dumps(
+        record.to_dict(), ensure_ascii=False, sort_keys=True
+    ).encode("utf-8") + b"\n"
+
+
+def _duplicate_key_bytes(record):
+    return _canonical_bytes(record).replace(
+        b'"title":"root"', b'"title":"discarded","title":"root"'
+    )
+
+
 def test_source_record_round_trip_and_canonical_order(tmp_path):
     record = make_record()
     target = tmp_path / "records.jsonl"
@@ -133,6 +145,32 @@ def test_small_model_output_remains_byte_identical(tmp_path):
 
     assert descriptor.storage_mode == "plain"
     assert target.read_bytes() == expected
+
+
+@pytest.mark.parametrize(
+    "line_factory", [_whitespace_formatted_bytes, _duplicate_key_bytes],
+    ids=["whitespace-formatted", "duplicate-key"],
+)
+@pytest.mark.parametrize(
+    "target_bytes, physical_name", [(10_000, "records.jsonl"), (32, "records-part-001.jsonl.gz")],
+    ids=["plain", "sharded"],
+)
+def test_read_rejects_noncanonical_model_bytes_with_physical_path_and_line(
+    tmp_path, line_factory, target_bytes, physical_name
+):
+    record = make_record(stored_members=())
+    target = tmp_path / "records.jsonl"
+    publish_jsonl_artifact(
+        target,
+        record_type="SourceRecord",
+        records=[(record.source_id, line_factory(record))],
+        target_bytes=target_bytes,
+        max_compressed_bytes=10_000,
+    )
+    physical_path = target.parent / physical_name
+
+    with pytest.raises(ValueError, match=rf"{physical_path}:1: record is not canonical"):
+        read_jsonl(target, SourceRecord, max_compressed_bytes=10_000)
 
 
 def test_relation_validation_spans_indexed_source_and_claim_ledgers(tmp_path):
@@ -197,10 +235,12 @@ def test_read_rejects_duplicate_nested_member_id_in_valid_artifact(tmp_path):
         target,
         record_type="SourceRecord",
         records=((record.source_id, _canonical_bytes(record)) for record in records),
+        target_bytes=32,
+        max_compressed_bytes=10_000,
     )
 
     with pytest.raises(ValueError, match="duplicate member_id"):
-        read_jsonl(target, SourceRecord)
+        read_jsonl(target, SourceRecord, max_compressed_bytes=10_000)
 
 
 def test_read_rejects_relation_target_absent_from_valid_artifact(tmp_path):
@@ -219,10 +259,12 @@ def test_read_rejects_relation_target_absent_from_valid_artifact(tmp_path):
         target,
         record_type="SourceRecord",
         records=[(source.source_id, _canonical_bytes(source))],
+        target_bytes=32,
+        max_compressed_bytes=10_000,
     )
 
     with pytest.raises(ValueError, match="target absent"):
-        read_jsonl(target, SourceRecord)
+        read_jsonl(target, SourceRecord, max_compressed_bytes=10_000)
 
 
 def test_read_rejects_changed_relation_in_frozen_universe(tmp_path):
@@ -243,15 +285,38 @@ def test_read_rejects_changed_relation_in_frozen_universe(tmp_path):
         target,
         record_type="SourceRecord",
         records=[(changed.source_id, _canonical_bytes(changed))],
+        target_bytes=32,
+        max_compressed_bytes=10_000,
     )
 
     with pytest.raises(ValueError, match="record absent or changed"):
-        read_jsonl(target, SourceRecord, source_universe=[frozen, target_record])
+        read_jsonl(
+            target,
+            SourceRecord,
+            source_universe=[frozen, target_record],
+            max_compressed_bytes=10_000,
+        )
 
 
 def test_write_rejects_wrong_declared_model_type(tmp_path):
     with pytest.raises(ValueError, match="declared model type"):
         write_jsonl(tmp_path / "records.jsonl", [make_record()], model_type=DocumentClaim)
+
+
+def test_write_typed_empty_ledger_as_zero_byte_plain_artifact(tmp_path):
+    target = tmp_path / "records.jsonl"
+
+    descriptor = write_jsonl(target, [], model_type=SourceRecord)
+
+    assert descriptor.storage_mode == "plain"
+    assert descriptor.record_count == 0
+    assert target.read_bytes() == b""
+    assert read_jsonl(target, SourceRecord) == []
+
+
+def test_write_rejects_untyped_empty_ledger(tmp_path):
+    with pytest.raises(ValueError, match="empty JSONL records require model_type"):
+        write_jsonl(tmp_path / "records.jsonl", [])
 
 
 def test_write_jsonl_replaces_atomically_from_sibling(tmp_path, monkeypatch):
@@ -274,9 +339,7 @@ def test_write_jsonl_replaces_atomically_from_sibling(tmp_path, monkeypatch):
 
 def test_read_jsonl_reports_path_and_line(tmp_path):
     target = tmp_path / "records.jsonl"
-    valid = json.dumps(make_record().to_dict(), ensure_ascii=False, sort_keys=True)
-    malformed = json.dumps({"source_id": "source-b"})
-    target.write_text(valid + "\n" + malformed + "\n", encoding="utf-8")
+    target.write_bytes(_canonical_bytes(make_record()) + b'{"broken"\n')
 
     with pytest.raises(ValueError, match=rf"{target}:2"):
         read_jsonl(target, SourceRecord)

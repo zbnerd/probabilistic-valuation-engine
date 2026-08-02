@@ -186,7 +186,10 @@ def read_jsonl_with_descriptor(
             payload = json.loads(line.decode("utf-8"))
             if not isinstance(payload, dict):
                 raise TypeError("record must be a JSON object")
-            records.append(model_type.from_dict(payload))
+            model = model_type.from_dict(payload)
+            if _canonical_line(model) != line:
+                raise ValueError("record is not canonical JSONL")
+            records.append(model)
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
             raise ValueError(f"{physical_path}:{line_number}: {error}") from error
 

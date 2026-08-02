@@ -491,3 +491,69 @@ def test_prepublication_staging_failures_leave_no_residue(
         )
     assert _files(tmp_path) == before
     assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+
+def test_temporary_write_failure_removes_the_newly_created_sibling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_write = artifact_module._temporary_write
+
+    def fail_after_write(stream, value: bytes) -> None:
+        original_write(stream, value)
+        raise OSError("temporary flush injected")
+
+    monkeypatch.setattr(artifact_module, "_temporary_write", fail_after_write)
+    with pytest.raises(OSError, match="temporary flush injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+
+def test_recovery_container_survives_its_final_removal_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_unlink = artifact_module._publication_unlink
+    backup_deletions = 0
+    recovery_removals = 0
+
+    def unlink(path: Path) -> None:
+        nonlocal backup_deletions, recovery_removals
+        if ".bak" in path.name:
+            backup_deletions += 1
+        if ".recovery" in path.name:
+            recovery_removals += 1
+            if recovery_removals == 1:
+                raise OSError("recovery removal injected")
+        original_unlink(path)
+
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(OSError, match="recovery removal injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert backup_deletions >= 1
+    assert _files(tmp_path) == before
+    assert not any(
+        ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
+        for item in tmp_path.iterdir()
+    )

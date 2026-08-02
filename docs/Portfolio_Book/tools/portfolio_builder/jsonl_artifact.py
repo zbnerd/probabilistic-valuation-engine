@@ -8,6 +8,7 @@ import io
 import json
 import re
 import shutil
+import tarfile
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -280,13 +281,24 @@ def _index_bytes(
     })
 
 
+def _temporary_write(stream, value: bytes) -> None:
+    stream.write(value)
+    stream.flush()
+
+
 def _temporary_bytes(target: Path, value: bytes) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
     temporary = Path(name)
-    with open(descriptor, "wb", closefd=True) as stream:
-        stream.write(value)
-        stream.flush()
+    try:
+        with open(descriptor, "wb", closefd=True) as stream:
+            _temporary_write(stream, value)
+    except Exception:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     return temporary
 
 
@@ -354,8 +366,51 @@ def _publication_unlink(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
-def _publication_copy(source: Path, destination: Path) -> None:
-    shutil.copyfile(source, destination)
+def _write_recovery_container(
+    container: Path, backups: list[tuple[Path, Path]]
+) -> None:
+    try:
+        with tarfile.open(container, "w") as archive:
+            for source, backup in backups:
+                info = tarfile.TarInfo(source.name)
+                info.size = backup.stat().st_size
+                with backup.open("rb") as stream:
+                    archive.addfile(info, stream)
+    except Exception:
+        container.unlink(missing_ok=True)
+        raise
+
+
+def _restore_recovery_container(
+    container: Path, backups: list[tuple[Path, Path]]
+) -> None:
+    expected = {source.name for source, _ in backups}
+    with tarfile.open(container, "r") as archive:
+        members = {member.name: member for member in archive.getmembers()}
+        if set(members) != expected or any(not member.isfile() for member in members.values()):
+            raise _error(container, "recovery container members")
+        for source, _ in backups:
+            member = members[source.name]
+            stream = archive.extractfile(member)
+            if stream is None:
+                raise _error(container, "recovery container member")
+            descriptor, name = tempfile.mkstemp(
+                prefix=f".{source.name}.", suffix=".restore.tmp", dir=source.parent
+            )
+            temporary = Path(name)
+            try:
+                with stream, open(descriptor, "wb", closefd=True) as destination:
+                    shutil.copyfileobj(stream, destination)
+                    destination.flush()
+                _publication_replace(temporary, source)
+            finally:
+                temporary.unlink(missing_ok=True)
+
+
+def _restore_backups(backups: list[tuple[Path, Path]]) -> None:
+    for source, backup in reversed(backups):
+        if backup.exists() or backup.is_symlink():
+            _publication_replace(backup, source)
 
 
 def _owned_shard_pattern(target: Path) -> re.Pattern[str]:
@@ -390,31 +445,27 @@ def _publish_transaction(target: Path, staged: list[tuple[Path, Path]]) -> None:
             raise _error(target, "published owned name is not a regular file")
     token = uuid.uuid4().hex
     backups = [(path, path.with_name(f".{path.name}.{token}.bak")) for path in old]
-    recoveries = [
-        (source, backup, source.with_name(f".{source.name}.{token}.restore"))
-        for source, backup in backups
-    ]
+    recovery = target.with_name(f".{target.name}.{token}.recovery.tar")
     published: list[Path] = []
     try:
         for source, backup in backups:
             _publication_replace(source, backup)
-        for _, backup, recovery in recoveries:
-            _publication_copy(backup, recovery)
+        _write_recovery_container(recovery, backups)
         for temporary, destination in staged:
             _publication_replace(temporary, destination)
             published.append(destination)
         _cleanup(backup for _, backup in backups)
-        _cleanup_after_recovery(recovery for _, _, recovery in recoveries)
+        _publication_unlink(recovery)
     except OSError:
         _cleanup_after_recovery([*published, *(temporary for temporary, _ in staged)])
-        for source, backup, recovery in reversed(recoveries):
-            restore = backup if backup.exists() or backup.is_symlink() else recovery
-            if restore.exists() or restore.is_symlink():
-                _publication_replace(restore, source)
+        if recovery.exists() and recovery.is_file():
+            _restore_recovery_container(recovery, backups)
+        else:
+            _restore_backups(backups)
         _cleanup_after_recovery([
             *(temporary for temporary, _ in staged),
             *(backup for _, backup in backups),
-            *(recovery for _, _, recovery in recoveries),
+            recovery,
         ])
         raise
     finally:

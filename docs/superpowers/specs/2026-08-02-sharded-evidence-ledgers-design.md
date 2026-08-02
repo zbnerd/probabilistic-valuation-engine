@@ -1,6 +1,6 @@
 # Sharded Evidence Ledgers Design
 
-**Status:** proposed for written-spec review
+**Status:** approved on 2026-08-02
 
 **Amends:** `docs/superpowers/specs/2026-08-01-exhaustive-portfolio-rebuild-design.md`
 

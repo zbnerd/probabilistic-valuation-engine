@@ -403,11 +403,12 @@ def _validate_recovery_container(
             expected[source.name] = _stream_metrics(stream)
     try:
         with tarfile.open(container, "r") as archive:
-            members = {member.name: member for member in archive.getmembers()}
-            if set(members) != set(expected) or any(
-                not member.isfile() for member in members.values()
+            member_list = archive.getmembers()
+            if sorted(member.name for member in member_list) != sorted(expected) or any(
+                not member.isfile() for member in member_list
             ):
                 raise _error(container, "recovery container members")
+            members = {member.name: member for member in member_list}
             for name, expected_metrics in expected.items():
                 member = members[name]
                 if member.size != expected_metrics[0]:

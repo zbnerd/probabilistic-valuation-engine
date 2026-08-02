@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -662,6 +663,57 @@ def test_recovery_container_is_validated_before_backup_deletion(
     monkeypatch.setattr(artifact_module, "_recovery_container_closed", corrupt_after_close)
     monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
     with pytest.raises(JsonlArtifactError, match="recovery container"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert backup_deletions == 0
+    assert _files(tmp_path) == before
+    assert not any(
+        ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
+        for item in tmp_path.iterdir()
+    )
+
+
+def test_recovery_container_rejects_duplicate_member_before_backup_deletion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_closed = artifact_module._recovery_container_closed
+    original_unlink = artifact_module._publication_unlink
+    backup_deletions = 0
+
+    def duplicate_expected_member(container: Path) -> None:
+        original_closed(container)
+        with tarfile.open(container, "r") as archive:
+            member = archive.getmembers()[0]
+            stream = archive.extractfile(member)
+            assert stream is not None
+            with stream:
+                value = stream.read()
+        duplicate = tarfile.TarInfo(member.name)
+        duplicate.size = len(value)
+        with tarfile.open(container, "a") as archive:
+            archive.addfile(duplicate, io.BytesIO(value))
+
+    def unlink(path: Path) -> None:
+        nonlocal backup_deletions
+        if ".bak" in path.name and path.exists():
+            backup_deletions += 1
+        original_unlink(path)
+
+    monkeypatch.setattr(
+        artifact_module, "_recovery_container_closed", duplicate_expected_member
+    )
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(JsonlArtifactError, match="recovery container members"):
         publish_jsonl_artifact(
             target,
             record_type="SourceRecord",

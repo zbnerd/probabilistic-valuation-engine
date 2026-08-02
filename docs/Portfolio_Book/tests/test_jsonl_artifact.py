@@ -557,3 +557,122 @@ def test_recovery_container_survives_its_final_removal_failure(
         ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
         for item in tmp_path.iterdir()
     )
+
+
+def test_temporary_write_cleanup_retries_a_one_shot_unlink_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_write = artifact_module._temporary_write
+    original_unlink = artifact_module._publication_unlink
+    unlink_failed = False
+
+    def fail_after_write(stream, value: bytes) -> None:
+        original_write(stream, value)
+        raise OSError("temporary write injected")
+
+    def unlink(path: Path) -> None:
+        nonlocal unlink_failed
+        if ".tmp" in path.name and not unlink_failed:
+            unlink_failed = True
+            raise OSError("temporary unlink injected")
+        original_unlink(path)
+
+    monkeypatch.setattr(artifact_module, "_temporary_write", fail_after_write)
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(OSError, match="temporary write injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert unlink_failed
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+
+def test_partial_recovery_creation_uses_intact_backups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_member = artifact_module._recovery_write_member
+    original_unlink = artifact_module._publication_unlink
+    cleanup_failed = False
+
+    def fail_after_partial(archive, source: Path, backup: Path) -> None:
+        original_member(archive, source, backup)
+        raise OSError("partial recovery injected")
+
+    def unlink(path: Path) -> None:
+        nonlocal cleanup_failed
+        if ".recovery" in path.name and not cleanup_failed:
+            cleanup_failed = True
+            raise OSError("recovery cleanup injected")
+        original_unlink(path)
+
+    monkeypatch.setattr(artifact_module, "_recovery_write_member", fail_after_partial)
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(OSError, match="partial recovery injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert cleanup_failed
+    assert _files(tmp_path) == before
+    assert not any(
+        ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
+        for item in tmp_path.iterdir()
+    )
+
+
+def test_recovery_container_is_validated_before_backup_deletion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_closed = artifact_module._recovery_container_closed
+    backup_deletions = 0
+    original_unlink = artifact_module._publication_unlink
+
+    def corrupt_after_close(container: Path) -> None:
+        original_closed(container)
+        container.write_bytes(container.read_bytes()[:16])
+
+    def unlink(path: Path) -> None:
+        nonlocal backup_deletions
+        if ".bak" in path.name and path.exists():
+            backup_deletions += 1
+        original_unlink(path)
+
+    monkeypatch.setattr(artifact_module, "_recovery_container_closed", corrupt_after_close)
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(JsonlArtifactError, match="recovery container"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert backup_deletions == 0
+    assert _files(tmp_path) == before
+    assert not any(
+        ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
+        for item in tmp_path.iterdir()
+    )

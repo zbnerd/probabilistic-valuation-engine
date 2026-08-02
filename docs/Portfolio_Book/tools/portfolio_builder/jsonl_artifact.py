@@ -294,10 +294,7 @@ def _temporary_bytes(target: Path, value: bytes) -> Path:
         with open(descriptor, "wb", closefd=True) as stream:
             _temporary_write(stream, value)
     except Exception:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
+        _cleanup_after_recovery((temporary,))
         raise
     return temporary
 
@@ -366,19 +363,63 @@ def _publication_unlink(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
-def _write_recovery_container(
-    container: Path, backups: list[tuple[Path, Path]]
-) -> None:
+def _recovery_write_member(archive, source: Path, backup: Path) -> None:
+    info = tarfile.TarInfo(source.name)
+    info.size = backup.stat().st_size
+    with backup.open("rb") as stream:
+        archive.addfile(info, stream)
+
+
+def _recovery_container_closed(container: Path) -> None:
+    """Test seam after a recovery archive closes and before it is trusted."""
+
+
+def _stream_metrics(stream) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    byte_count = 0
+    while chunk := stream.read(1_048_576):
+        byte_count += len(chunk)
+        digest.update(chunk)
+    return byte_count, digest.hexdigest()
+
+
+def _write_recovery_container(container: Path, backups: list[tuple[Path, Path]]) -> None:
     try:
         with tarfile.open(container, "w") as archive:
             for source, backup in backups:
-                info = tarfile.TarInfo(source.name)
-                info.size = backup.stat().st_size
-                with backup.open("rb") as stream:
-                    archive.addfile(info, stream)
+                _recovery_write_member(archive, source, backup)
+        _recovery_container_closed(container)
     except Exception:
-        container.unlink(missing_ok=True)
+        _cleanup_after_recovery((container,))
         raise
+
+
+def _validate_recovery_container(
+    container: Path, backups: list[tuple[Path, Path]]
+) -> None:
+    expected: dict[str, tuple[int, str]] = {}
+    for source, backup in backups:
+        with backup.open("rb") as stream:
+            expected[source.name] = _stream_metrics(stream)
+    try:
+        with tarfile.open(container, "r") as archive:
+            members = {member.name: member for member in archive.getmembers()}
+            if set(members) != set(expected) or any(
+                not member.isfile() for member in members.values()
+            ):
+                raise _error(container, "recovery container members")
+            for name, expected_metrics in expected.items():
+                member = members[name]
+                if member.size != expected_metrics[0]:
+                    raise _error(container, "recovery container byte count")
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise _error(container, "recovery container member")
+                with stream:
+                    if _stream_metrics(stream) != expected_metrics:
+                        raise _error(container, "recovery container SHA-256")
+    except (OSError, tarfile.TarError) as error:
+        raise _error(container, "recovery container") from error
 
 
 def _restore_recovery_container(
@@ -447,18 +488,21 @@ def _publish_transaction(target: Path, staged: list[tuple[Path, Path]]) -> None:
     backups = [(path, path.with_name(f".{path.name}.{token}.bak")) for path in old]
     recovery = target.with_name(f".{target.name}.{token}.recovery.tar")
     published: list[Path] = []
+    recovery_ready = False
     try:
         for source, backup in backups:
             _publication_replace(source, backup)
         _write_recovery_container(recovery, backups)
+        _validate_recovery_container(recovery, backups)
+        recovery_ready = True
         for temporary, destination in staged:
             _publication_replace(temporary, destination)
             published.append(destination)
         _cleanup(backup for _, backup in backups)
         _publication_unlink(recovery)
-    except OSError:
+    except Exception:
         _cleanup_after_recovery([*published, *(temporary for temporary, _ in staged)])
-        if recovery.exists() and recovery.is_file():
+        if recovery_ready:
             _restore_recovery_container(recovery, backups)
         else:
             _restore_backups(backups)

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ SCHEMA_VERSION = 1
 DEFAULT_TARGET_BYTES = 50_000_000
 DEFAULT_MAX_COMPRESSED_BYTES = 90_000_000
 MAX_SHARDS = 999
+_MAX_PHYSICAL_BLOB_BYTES = 95_000_000
 
 _SHARD_KEYS = frozenset({
     "ordinal", "path", "record_count", "first_identity", "last_identity",
@@ -240,10 +242,11 @@ def _validate_record(identity: str, line: bytes, seen: set[str], target: Path) -
     seen.add(identity)
 
 
-def _shard_descriptor(ordinal: int, logical_stem: str, value: bytes) -> JsonlShardDescriptor:
+def _shard_descriptor(
+    ordinal: int, logical_stem: str, value: bytes, compressed: bytes
+) -> JsonlShardDescriptor:
     lines = value.splitlines(keepends=True)
     identities = [_identity_from_line(Path(logical_stem), line) for line in lines]
-    compressed = _gzip_bytes(value)
     return JsonlShardDescriptor(
         ordinal=ordinal,
         path=f"{logical_stem}-part-{ordinal:03d}.jsonl.gz",
@@ -287,12 +290,72 @@ def _temporary_bytes(target: Path, value: bytes) -> Path:
     return temporary
 
 
+def _stage_bytes(target: Path, value: bytes) -> Path:
+    if len(value) >= _MAX_PHYSICAL_BLOB_BYTES:
+        raise _error(target, "physical blob limit")
+    temporary: Path | None = None
+    try:
+        temporary = _temporary_bytes(target, value)
+        if temporary.is_symlink() or not temporary.is_file() or temporary.read_bytes() != value:
+            raise _error(target, "staged bytes")
+        return temporary
+    except Exception:
+        if temporary is not None:
+            _cleanup_after_recovery((temporary,))
+        raise
+
+
+def _validate_staged_shard(
+    target: Path, temporary: Path, descriptor: JsonlShardDescriptor
+) -> None:
+    compressed = temporary.read_bytes()
+    if len(compressed) != descriptor.compressed_byte_count:
+        raise _error(target, "staged compressed byte count")
+    if hashlib.sha256(compressed).hexdigest() != descriptor.compressed_sha256:
+        raise _error(target, "staged compressed SHA-256")
+    if len(compressed) < 10 or compressed[4:8] != b"\0\0\0\0" or compressed[3] & 0x08:
+        raise _error(target, "staged gzip header")
+    with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
+        lines = list(stream)
+    raw = b"".join(lines)
+    if len(raw) != descriptor.uncompressed_byte_count:
+        raise _error(target, "staged uncompressed byte count")
+    if hashlib.sha256(raw).hexdigest() != descriptor.uncompressed_sha256:
+        raise _error(target, "staged uncompressed SHA-256")
+    if len(lines) != descriptor.record_count:
+        raise _error(target, "staged record count")
+    identities = [_identity_from_line(target, line) for line in lines]
+    if identities[0] != descriptor.first_identity or identities[-1] != descriptor.last_identity:
+        raise _error(target, "staged identity boundary")
+
+
+def _stage_shard(
+    target: Path, ordinal: int, value: bytes, max_compressed_bytes: int
+) -> tuple[JsonlShardDescriptor, tuple[Path, Path]]:
+    compressed = _gzip_bytes(value)
+    if len(compressed) > max_compressed_bytes:
+        raise _error(target, "compressed byte limit")
+    descriptor = _shard_descriptor(ordinal, target.stem, value, compressed)
+    destination = target.parent / descriptor.path
+    temporary = _stage_bytes(destination, compressed)
+    try:
+        _validate_staged_shard(target, temporary, descriptor)
+    except Exception:
+        _cleanup_after_recovery((temporary,))
+        raise
+    return descriptor, (temporary, destination)
+
+
 def _publication_replace(source: Path, destination: Path) -> None:
     source.replace(destination)
 
 
 def _publication_unlink(path: Path) -> None:
     path.unlink(missing_ok=True)
+
+
+def _publication_copy(source: Path, destination: Path) -> None:
+    shutil.copyfile(source, destination)
 
 
 def _owned_shard_pattern(target: Path) -> re.Pattern[str]:
@@ -327,20 +390,32 @@ def _publish_transaction(target: Path, staged: list[tuple[Path, Path]]) -> None:
             raise _error(target, "published owned name is not a regular file")
     token = uuid.uuid4().hex
     backups = [(path, path.with_name(f".{path.name}.{token}.bak")) for path in old]
+    recoveries = [
+        (source, backup, source.with_name(f".{source.name}.{token}.restore"))
+        for source, backup in backups
+    ]
     published: list[Path] = []
     try:
         for source, backup in backups:
             _publication_replace(source, backup)
+        for _, backup, recovery in recoveries:
+            _publication_copy(backup, recovery)
         for temporary, destination in staged:
             _publication_replace(temporary, destination)
             published.append(destination)
         _cleanup(backup for _, backup in backups)
+        _cleanup_after_recovery(recovery for _, _, recovery in recoveries)
     except OSError:
         _cleanup_after_recovery([*published, *(temporary for temporary, _ in staged)])
-        for source, backup in reversed(backups):
-            if backup.exists() or backup.is_symlink():
-                _publication_replace(backup, source)
-        _cleanup_after_recovery([*(temporary for temporary, _ in staged), *(backup for _, backup in backups)])
+        for source, backup, recovery in reversed(recoveries):
+            restore = backup if backup.exists() or backup.is_symlink() else recovery
+            if restore.exists() or restore.is_symlink():
+                _publication_replace(restore, source)
+        _cleanup_after_recovery([
+            *(temporary for temporary, _ in staged),
+            *(backup for _, backup in backups),
+            *(recovery for _, _, recovery in recoveries),
+        ])
         raise
     finally:
         _cleanup_after_recovery(temporary for temporary, _ in staged if temporary.exists())
@@ -363,65 +438,82 @@ def publish_jsonl_artifact(
     max_compressed_bytes: int = DEFAULT_MAX_COMPRESSED_BYTES,
 ) -> JsonlArtifactDescriptor:
     """Render, validate, and atomically publish a deterministic JSONL artifact."""
-    if isinstance(target_bytes, bool) or not isinstance(target_bytes, int) or target_bytes <= 0:
-        raise JsonlArtifactError("target_bytes must be positive")
-    if isinstance(max_compressed_bytes, bool) or not isinstance(max_compressed_bytes, int) or max_compressed_bytes <= 0:
-        raise JsonlArtifactError("max_compressed_bytes must be positive")
+    if (
+        isinstance(target_bytes, bool)
+        or not isinstance(target_bytes, int)
+        or target_bytes <= 0
+        or target_bytes > DEFAULT_TARGET_BYTES
+    ):
+        raise JsonlArtifactError("target_bytes must be positive and at most 50_000_000")
+    if (
+        isinstance(max_compressed_bytes, bool)
+        or not isinstance(max_compressed_bytes, int)
+        or max_compressed_bytes <= 0
+        or max_compressed_bytes > DEFAULT_MAX_COMPRESSED_BYTES
+    ):
+        raise JsonlArtifactError("max_compressed_bytes must be positive and at most 90_000_000")
     if not isinstance(record_type, str) or not record_type:
         raise JsonlArtifactError("record_type must be a nonempty string")
     target = Path(path)
     seen: set[str] = set()
     canonical_digest = hashlib.sha256()
     canonical_byte_count = 0
-    shards: list[bytes] = []
-    current = bytearray()
-    for identity, line in records:
-        _validate_record(identity, line, seen, target)
-        if current and len(current) + len(line) > target_bytes:
-            shards.append(bytes(current))
-            current.clear()
-        current.extend(line)
-        canonical_digest.update(line)
-        canonical_byte_count += len(line)
-    if current:
-        shards.append(bytes(current))
-    canonical_sha256 = canonical_digest.hexdigest()
-    if canonical_byte_count <= target_bytes:
-        plain_bytes = shards[0] if shards else b""
-        staged_logical = _temporary_bytes(target, plain_bytes)
-        descriptor = _descriptor_for_plain(target, record_type, plain_bytes, len(seen))
-        _publish_transaction(target, [(staged_logical, target)])
-        return descriptor
-    if len(shards) > MAX_SHARDS:
-        raise _error(target, "shard count exceeds 999")
     descriptors: list[JsonlShardDescriptor] = []
     staged: list[tuple[Path, Path]] = []
-    for ordinal, value in enumerate(shards, start=1):
-        descriptor = _shard_descriptor(ordinal, target.stem, value)
-        compressed = _gzip_bytes(value)
-        if len(compressed) > max_compressed_bytes:
-            raise _error(target, "compressed byte limit")
-        if len(compressed) != descriptor.compressed_byte_count or hashlib.sha256(compressed).hexdigest() != descriptor.compressed_sha256:
-            raise _error(target, "generated compressed shard descriptor")
+    current = bytearray()
+    sharded = False
+
+    def flush_current() -> None:
+        nonlocal current
+        if not current:
+            return
+        ordinal = len(descriptors) + 1
+        if ordinal > MAX_SHARDS:
+            raise _error(target, "shard count exceeds 999")
+        descriptor, physical = _stage_shard(
+            target, ordinal, bytes(current), max_compressed_bytes
+        )
         descriptors.append(descriptor)
-        staged.append((_temporary_bytes(target.parent / descriptor.path, compressed), target.parent / descriptor.path))
-    shard_tuple = tuple(descriptors)
-    index = _index_bytes(
-        target, record_type, canonical_byte_count, canonical_sha256, shard_tuple
-    )
+        staged.append(physical)
+        current.clear()
+
     try:
-        parsed = json.loads(index)
-    except json.JSONDecodeError as error:
-        raise _error(target, "generated index JSON") from error
-    _require_exact_keys(parsed, _INDEX_KEYS, "index")
-    staged.append((_temporary_bytes(target, index), target))
-    descriptor = JsonlArtifactDescriptor(
-        SCHEMA_VERSION, SHARDED_JSONL_FORMAT, target.name, len(index),
-        hashlib.sha256(index).hexdigest(), record_type, len(seen), canonical_byte_count,
-        canonical_sha256, shard_tuple,
-    )
-    _publish_transaction(target, staged)
-    return descriptor
+        for identity, line in records:
+            _validate_record(identity, line, seen, target)
+            if current and len(current) + len(line) > target_bytes:
+                flush_current()
+                sharded = True
+            current.extend(line)
+            canonical_digest.update(line)
+            canonical_byte_count += len(line)
+        canonical_sha256 = canonical_digest.hexdigest()
+        if not sharded and canonical_byte_count <= target_bytes:
+            plain_bytes = bytes(current)
+            staged_logical = _stage_bytes(target, plain_bytes)
+            descriptor = _descriptor_for_plain(target, record_type, plain_bytes, len(seen))
+            _publish_transaction(target, [(staged_logical, target)])
+            return descriptor
+        flush_current()
+        shard_tuple = tuple(descriptors)
+        index = _index_bytes(
+            target, record_type, canonical_byte_count, canonical_sha256, shard_tuple
+        )
+        try:
+            parsed = json.loads(index)
+        except json.JSONDecodeError as error:
+            raise _error(target, "generated index JSON") from error
+        _require_exact_keys(parsed, _INDEX_KEYS, "index")
+        staged.append((_stage_bytes(target, index), target))
+        descriptor = JsonlArtifactDescriptor(
+            SCHEMA_VERSION, SHARDED_JSONL_FORMAT, target.name, len(index),
+            hashlib.sha256(index).hexdigest(), record_type, len(seen), canonical_byte_count,
+            canonical_sha256, shard_tuple,
+        )
+        _publish_transaction(target, staged)
+        return descriptor
+    except Exception:
+        _cleanup_after_recovery(temporary for temporary, _ in staged)
+        raise
 
 
 def _parse_index(target: Path, raw: bytes, expected_record_type: str) -> tuple[tuple[JsonlShardDescriptor, ...], Mapping[str, object]]:
@@ -492,7 +584,7 @@ def _indexed_pass(target: Path, shards: tuple[JsonlShardDescriptor, ...], payloa
         if not physical.is_file():
             raise _error(target, "missing shard")
         compressed = physical.read_bytes()
-        if len(compressed) > max_compressed_bytes:
+        if len(compressed) >= _MAX_PHYSICAL_BLOB_BYTES or len(compressed) > max_compressed_bytes:
             raise _error(target, "compressed byte limit")
         if hashlib.sha256(compressed).hexdigest() != shard.compressed_sha256:
             raise _error(target, "compressed SHA-256")
@@ -561,12 +653,19 @@ def read_jsonl_artifact(
     """Perform a complete validation pass before exposing artifact records."""
     if not isinstance(expected_record_type, str) or not expected_record_type:
         raise JsonlArtifactError("expected_record_type must be a nonempty string")
-    if isinstance(max_compressed_bytes, bool) or not isinstance(max_compressed_bytes, int) or max_compressed_bytes <= 0:
-        raise JsonlArtifactError("max_compressed_bytes must be positive")
+    if (
+        isinstance(max_compressed_bytes, bool)
+        or not isinstance(max_compressed_bytes, int)
+        or max_compressed_bytes <= 0
+        or max_compressed_bytes > DEFAULT_MAX_COMPRESSED_BYTES
+    ):
+        raise JsonlArtifactError("max_compressed_bytes must be positive and at most 90_000_000")
     target = Path(path)
     if target.is_symlink() or not target.is_file():
         raise _error(target, "logical artifact is not a regular file")
     raw = target.read_bytes()
+    if len(raw) >= _MAX_PHYSICAL_BLOB_BYTES:
+        raise _error(target, "physical blob limit")
     try:
         shards, payload = _parse_index(target, raw, expected_record_type)
     except _NotIndex:

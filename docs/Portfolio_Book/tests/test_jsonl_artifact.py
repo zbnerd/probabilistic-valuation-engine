@@ -312,3 +312,182 @@ def test_publication_failure_restores_exact_previous_union(
     after = {path.name: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()}
     assert after == before
     assert not any(".tmp" in path.name or ".bak" in path.name for path in tmp_path.iterdir())
+
+
+def _files(path: Path) -> dict[str, bytes]:
+    return {item.name: item.read_bytes() for item in path.iterdir() if item.is_file()}
+
+
+def test_late_backup_cleanup_failure_restores_deleted_old_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_unlink = artifact_module._publication_unlink
+    cleanup_count = 0
+
+    def unlink(path: Path) -> None:
+        nonlocal cleanup_count
+        if ".bak" in path.name:
+            cleanup_count += 1
+            if cleanup_count == 2:
+                raise OSError("late cleanup injected")
+        original_unlink(path)
+
+    monkeypatch.setattr(artifact_module, "_publication_unlink", unlink)
+    with pytest.raises(OSError, match="late cleanup injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+
+def test_staged_bytes_are_reread_before_publishing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_temporary_bytes = artifact_module._temporary_bytes
+
+    def corrupt(target_path: Path, value: bytes) -> Path:
+        staged = original_temporary_bytes(target_path, value)
+        staged.write_bytes(value[:-1])
+        return staged
+
+    monkeypatch.setattr(artifact_module, "_temporary_bytes", corrupt)
+    with pytest.raises(JsonlArtifactError, match="staged bytes"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("replacement", "x" * 80)],
+            target_bytes=32,
+            max_compressed_bytes=256,
+        )
+
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+
+def test_public_limits_and_blob_limit_are_hard_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = tmp_path / "records.jsonl"
+    with pytest.raises(JsonlArtifactError, match="target_bytes"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("source")],
+            target_bytes=50_000_001,
+        )
+    with pytest.raises(JsonlArtifactError, match="max_compressed_bytes"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("source")],
+            max_compressed_bytes=90_000_001,
+        )
+
+    monkeypatch.setattr(artifact_module, "_MAX_PHYSICAL_BLOB_BYTES", 24)
+    with pytest.raises(JsonlArtifactError, match="physical blob limit"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("source", "x" * 40)],
+            target_bytes=128,
+            max_compressed_bytes=128,
+        )
+    assert not list(tmp_path.iterdir())
+
+
+def test_completed_shards_are_staged_before_iterator_advances(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    calls: list[bytes] = []
+    original_gzip_bytes = artifact_module._gzip_bytes
+
+    def gzip_bytes(value: bytes) -> bytes:
+        calls.append(value)
+        return original_gzip_bytes(value)
+
+    def records():
+        first = _line("source-a", "a" * 35)
+        second = _line("source-b", "b" * 35)
+        yield first
+        yield second
+        assert calls, "the completed first shard was retained instead of staged"
+        yield _line("source-c", "c" * 35)
+
+    monkeypatch.setattr(artifact_module, "_gzip_bytes", gzip_bytes)
+    publish_jsonl_artifact(
+        tmp_path / "records.jsonl",
+        record_type="SourceRecord",
+        records=records(),
+        target_bytes=len(_line("source-a", "a" * 35)[1]),
+        max_compressed_bytes=256,
+    )
+
+
+def test_prepublication_staging_failures_leave_no_residue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = _make_existing_sharded_artifact(tmp_path)
+    before = _files(tmp_path)
+    original_gzip_bytes = artifact_module._gzip_bytes
+    gzip_calls = 0
+
+    def too_large_second_shard(value: bytes) -> bytes:
+        nonlocal gzip_calls
+        gzip_calls += 1
+        result = original_gzip_bytes(value)
+        return result if gzip_calls == 1 else result + b"x" * 300
+
+    monkeypatch.setattr(artifact_module, "_gzip_bytes", too_large_second_shard)
+    with pytest.raises(JsonlArtifactError, match="compressed byte limit"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("first", "a" * 35), _line("second", "b" * 35)],
+            target_bytes=len(_line("first", "a" * 35)[1]),
+            max_compressed_bytes=256,
+        )
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())
+
+    original_temporary_bytes = artifact_module._temporary_bytes
+    temporary_calls = 0
+
+    def fail_second_temporary(target_path: Path, value: bytes) -> Path:
+        nonlocal temporary_calls
+        temporary_calls += 1
+        if temporary_calls == 2:
+            raise OSError("temporary write injected")
+        return original_temporary_bytes(target_path, value)
+
+    monkeypatch.setattr(artifact_module, "_gzip_bytes", original_gzip_bytes)
+    monkeypatch.setattr(artifact_module, "_temporary_bytes", fail_second_temporary)
+    with pytest.raises(OSError, match="temporary write injected"):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("first", "a" * 35), _line("second", "b" * 35)],
+            target_bytes=len(_line("first", "a" * 35)[1]),
+            max_compressed_bytes=256,
+        )
+    assert _files(tmp_path) == before
+    assert not any(".tmp" in item.name or ".bak" in item.name for item in tmp_path.iterdir())

@@ -1,4 +1,5 @@
 import hashlib
+from http.client import RemoteDisconnected
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +36,10 @@ class FixtureTransport:
 
     def request(self, url, headers):
         self.requests.append((url, dict(headers)))
-        return self.responses.pop(0)
+        result = self.responses.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 def response(status, body=b"", **headers):
@@ -192,6 +196,39 @@ def test_502_retry_is_bounded_and_error_does_not_expose_token_or_body(tmp_path):
     assert secret.encode() not in b"".join(
         path.read_bytes() for path in (tmp_path / "checkpoints").glob("*")
     )
+
+
+def test_transient_disconnect_retries_then_returns_the_following_response(tmp_path):
+    clock = FakeClock()
+    client, transport = make_client(
+        tmp_path,
+        [RemoteDisconnected("connection closed"), response(200, b'{"ok":true}')],
+        clock=clock,
+    )
+
+    assert client.get_json("/repos/o/r") == {"ok": True}
+    assert len(transport.requests) == 2
+    assert clock.now() == 1_700_000_001.0
+
+
+def test_transient_disconnect_exhaustion_is_safe_and_writes_no_checkpoint(tmp_path):
+    secret = "transport-secret-must-not-leak"
+    clock = FakeClock()
+    client, transport = make_client(
+        tmp_path,
+        [RemoteDisconnected(secret) for _ in range(3)],
+        clock=clock,
+    )
+
+    with pytest.raises(GitHubClientError) as caught:
+        client.get_bytes("/repos/o/r/archive")
+
+    rendered = repr(caught.value) + str(caught.value)
+    assert len(transport.requests) == 3
+    assert clock.now() == 1_700_000_003.0
+    assert secret not in rendered
+    assert "endpoint=/repos/o/r/archive" in rendered
+    assert not tuple((tmp_path / "checkpoints").glob("*"))
 
 
 def test_404_records_confirmed_unavailable_without_guessing(tmp_path):

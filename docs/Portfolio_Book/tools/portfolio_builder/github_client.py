@@ -382,8 +382,19 @@ class GitHubClient:
             headers["If-None-Match"] = prior.etag
 
         server_error_attempt = 0
+        transport_error_attempt = 0
         for attempt in range(MAX_ATTEMPTS):
-            response = self._transport.request(url, headers)
+            try:
+                response = self._transport.request(url, headers)
+            except (ConnectionError, urllib.error.URLError, TimeoutError):
+                if attempt + 1 < MAX_ATTEMPTS:
+                    self._clock.sleep(float(2**transport_error_attempt))
+                    transport_error_attempt += 1
+                    continue
+                raise GitHubClientError(
+                    f"github retries exhausted: endpoint={endpoint}"
+                ) from None
+            transport_error_attempt = 0
             self.rate_limit_state = RateLimitState.from_headers(response.headers)
             if response.status == 304:
                 if prior is None:

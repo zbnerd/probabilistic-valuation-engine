@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
-from typing import Protocol, TypeVar
+from typing import Iterable, Protocol, TypeVar
 
+from .jsonl_artifact import (
+    DEFAULT_MAX_COMPRESSED_BYTES,
+    DEFAULT_TARGET_BYTES,
+    JsonlArtifactDescriptor,
+    publish_jsonl_artifact,
+    read_jsonl_artifact,
+)
 from .models import DocumentClaim, ExplicitRelation, SourceRecord
 
 
@@ -116,42 +121,83 @@ def validate_relation_ledger(
     return ledger
 
 
+def _canonical_line(item: CanonicalModel) -> bytes:
+    return json.dumps(
+        item.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8") + b"\n"
+
+
+def _required_identity(item: object) -> str:
+    identity = _identity(item)
+    if identity is None:
+        raise ValueError(f"canonical model has no stable identity: {type(item).__name__}")
+    return identity[1]
+
+
 def write_jsonl(
     path: str | Path,
-    records,
+    records: Iterable[CanonicalModel],
     *,
+    model_type: type[CanonicalModel] | None = None,
     source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
     claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
-) -> None:
-    """Atomically write canonical UTF-8 JSONL to *path*."""
-    target = Path(path)
+    target_bytes: int = DEFAULT_TARGET_BYTES,
+    max_compressed_bytes: int = DEFAULT_MAX_COMPRESSED_BYTES,
+) -> JsonlArtifactDescriptor:
+    """Publish canonical model records through the physical artifact layer."""
     items = list(records)
     model_types = {type(item) for item in items}
     if len(model_types) > 1:
         names = ", ".join(sorted(model_type.__name__ for model_type in model_types))
         raise ValueError(f"JSONL records must have one homogeneous model type; got: {names}")
+    if model_type is None:
+        if not items:
+            raise ValueError("empty JSONL records require model_type")
+        model_type = next(iter(model_types))
+    if any(type(item) is not model_type for item in items):
+        raise ValueError(
+            f"declared model type {model_type.__name__} differs from record model type"
+        )
     _validate(items, source_universe, claim_universe)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent
+    return publish_jsonl_artifact(
+        path,
+        record_type=model_type.__name__,
+        records=(
+            (_required_identity(item), _canonical_line(item)) for item in items
+        ),
+        target_bytes=target_bytes,
+        max_compressed_bytes=max_compressed_bytes,
     )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-            for item in items:
-                json.dump(
-                    item.to_dict(),
-                    stream,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(target)
-    finally:
-        temporary.unlink(missing_ok=True)
+
+
+def read_jsonl_with_descriptor(
+    path: str | Path,
+    model_type: type[ModelT],
+    *,
+    source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
+    claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
+    max_compressed_bytes: int = DEFAULT_MAX_COMPRESSED_BYTES,
+) -> tuple[list[ModelT], JsonlArtifactDescriptor]:
+    """Read and validate canonical models after physical artifact validation."""
+    records: list[ModelT] = []
+
+    def consume(physical_path: Path, line_number: int, line: bytes) -> None:
+        try:
+            payload = json.loads(line.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise TypeError("record must be a JSON object")
+            records.append(model_type.from_dict(payload))
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"{physical_path}:{line_number}: {error}") from error
+
+    descriptor = read_jsonl_artifact(
+        path,
+        expected_record_type=model_type.__name__,
+        consume=consume,
+        max_compressed_bytes=max_compressed_bytes,
+    )
+    _validate(records, source_universe, claim_universe)  # type: ignore[arg-type]
+    return records, descriptor
 
 
 def read_jsonl(
@@ -160,18 +206,13 @@ def read_jsonl(
     *,
     source_universe: list[SourceRecord] | tuple[SourceRecord, ...] | None = None,
     claim_universe: list[DocumentClaim] | tuple[DocumentClaim, ...] | None = None,
+    max_compressed_bytes: int = DEFAULT_MAX_COMPRESSED_BYTES,
 ) -> list[ModelT]:
-    """Read canonical model records, identifying malformed input by path and line."""
-    source = Path(path)
-    records: list[ModelT] = []
-    with source.open("r", encoding="utf-8") as stream:
-        for line_number, line in enumerate(stream, start=1):
-            try:
-                payload = json.loads(line)
-                if not isinstance(payload, dict):
-                    raise TypeError("record must be a JSON object")
-                records.append(model_type.from_dict(payload))
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
-                raise ValueError(f"{source}:{line_number}: {error}") from error
-    _validate(records, source_universe, claim_universe)  # type: ignore[arg-type]
-    return records
+    """Read canonical model records through the physical artifact layer."""
+    return read_jsonl_with_descriptor(
+        path,
+        model_type,
+        source_universe=source_universe,
+        claim_universe=claim_universe,
+        max_compressed_bytes=max_compressed_bytes,
+    )[0]

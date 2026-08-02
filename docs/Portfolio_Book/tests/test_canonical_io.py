@@ -4,9 +4,11 @@ import pytest
 
 from portfolio_builder.canonical_io import (
     read_jsonl,
+    read_jsonl_with_descriptor,
     validate_relation_ledger,
     write_jsonl,
 )
+from portfolio_builder.jsonl_artifact import publish_jsonl_artifact
 from portfolio_builder.models import (
     DocumentClaim,
     ExplicitRelation,
@@ -75,6 +77,12 @@ def make_claim(**overrides):
     return DocumentClaim(**values)
 
 
+def _canonical_bytes(record):
+    return json.dumps(
+        record.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8") + b"\n"
+
+
 def test_source_record_round_trip_and_canonical_order(tmp_path):
     record = make_record()
     target = tmp_path / "records.jsonl"
@@ -86,6 +94,164 @@ def test_source_record_round_trip_and_canonical_order(tmp_path):
     assert text.endswith("\n") and not text.endswith("\n\n")
     assert text.index('"a"') < text.index('"z"')
     assert ": " not in text
+
+
+def test_write_and_read_large_models_through_unchanged_logical_path(tmp_path):
+    records = [
+        make_record(source_id=f"source-{index}", stored_members=(), title="x" * 60)
+        for index in range(3)
+    ]
+    target = tmp_path / "source_records.jsonl"
+
+    written = write_jsonl(
+        target,
+        records,
+        model_type=SourceRecord,
+        target_bytes=300,
+        max_compressed_bytes=10_000,
+    )
+    loaded, inspected = read_jsonl_with_descriptor(
+        target,
+        SourceRecord,
+        max_compressed_bytes=10_000,
+    )
+
+    assert written.storage_mode == "canonical-jsonl-gzip-shards-v1"
+    assert loaded == records
+    assert inspected == written
+    assert read_jsonl(target, SourceRecord, max_compressed_bytes=10_000) == records
+
+
+def test_small_model_output_remains_byte_identical(tmp_path):
+    record = make_record()
+    target = tmp_path / "records.jsonl"
+    expected = json.dumps(
+        record.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8") + b"\n"
+
+    descriptor = write_jsonl(target, [record], model_type=SourceRecord)
+
+    assert descriptor.storage_mode == "plain"
+    assert target.read_bytes() == expected
+
+
+def test_relation_validation_spans_indexed_source_and_claim_ledgers(tmp_path):
+    claim = make_claim(claim_id="claim-b", text="x" * 100)
+    relation = ExplicitRelation.create(
+        owner_source_id="source-a",
+        relation_type="supports",
+        target_source_id=claim.claim_id,
+        evidence_locator="docs/evidence.md#L1-L2",
+        evidence_hash=claim.raw_hash,
+    )
+    source = make_record(
+        source_id="source-a",
+        stored_members=(),
+        explicit_relations=(relation,),
+        title="x" * 100,
+    )
+    source_path = tmp_path / "source_records.jsonl"
+    claim_path = tmp_path / "document_claim_inventory.jsonl"
+
+    write_jsonl(
+        source_path,
+        [source],
+        model_type=SourceRecord,
+        claim_universe=[claim],
+        target_bytes=32,
+        max_compressed_bytes=10_000,
+    )
+    write_jsonl(
+        claim_path,
+        [claim],
+        model_type=DocumentClaim,
+        source_universe=[source],
+        claim_universe=[claim],
+        target_bytes=32,
+        max_compressed_bytes=10_000,
+    )
+
+    assert read_jsonl(
+        source_path,
+        SourceRecord,
+        claim_universe=[claim],
+        max_compressed_bytes=10_000,
+    ) == [source]
+    assert read_jsonl(
+        claim_path,
+        DocumentClaim,
+        source_universe=[source],
+        claim_universe=[claim],
+        max_compressed_bytes=10_000,
+    ) == [claim]
+
+
+def test_read_rejects_duplicate_nested_member_id_in_valid_artifact(tmp_path):
+    member = StoredArtifactMember("member-1", "archive#a", 1, 1, 10, "1" * 64)
+    records = [
+        make_record(source_id="source-a", stored_members=(member,)),
+        make_record(source_id="source-b", stored_members=(member,)),
+    ]
+    target = tmp_path / "records.jsonl"
+    publish_jsonl_artifact(
+        target,
+        record_type="SourceRecord",
+        records=((record.source_id, _canonical_bytes(record)) for record in records),
+    )
+
+    with pytest.raises(ValueError, match="duplicate member_id"):
+        read_jsonl(target, SourceRecord)
+
+
+def test_read_rejects_relation_target_absent_from_valid_artifact(tmp_path):
+    relation = ExplicitRelation.create(
+        owner_source_id="source-a",
+        relation_type="supports",
+        target_source_id="claim-b",
+        evidence_locator="docs/evidence.md#L1-L2",
+        evidence_hash="3" * 64,
+    )
+    source = make_record(
+        source_id="source-a", stored_members=(), explicit_relations=(relation,)
+    )
+    target = tmp_path / "source_records.jsonl"
+    publish_jsonl_artifact(
+        target,
+        record_type="SourceRecord",
+        records=[(source.source_id, _canonical_bytes(source))],
+    )
+
+    with pytest.raises(ValueError, match="target absent"):
+        read_jsonl(target, SourceRecord)
+
+
+def test_read_rejects_changed_relation_in_frozen_universe(tmp_path):
+    relation = ExplicitRelation.create(
+        owner_source_id="source-a",
+        relation_type="supports",
+        target_source_id="source-b",
+        evidence_locator="docs/evidence.md#L1-L2",
+        evidence_hash="3" * 64,
+    )
+    frozen = make_record(
+        source_id="source-a", stored_members=(), explicit_relations=(relation,)
+    )
+    changed = make_record(source_id="source-a", stored_members=())
+    target_record = make_record(source_id="source-b", stored_members=())
+    target = tmp_path / "source_records.jsonl"
+    publish_jsonl_artifact(
+        target,
+        record_type="SourceRecord",
+        records=[(changed.source_id, _canonical_bytes(changed))],
+    )
+
+    with pytest.raises(ValueError, match="record absent or changed"):
+        read_jsonl(target, SourceRecord, source_universe=[frozen, target_record])
+
+
+def test_write_rejects_wrong_declared_model_type(tmp_path):
+    with pytest.raises(ValueError, match="declared model type"):
+        write_jsonl(tmp_path / "records.jsonl", [make_record()], model_type=DocumentClaim)
 
 
 def test_write_jsonl_replaces_atomically_from_sibling(tmp_path, monkeypatch):
@@ -101,16 +267,16 @@ def test_write_jsonl_replaces_atomically_from_sibling(tmp_path, monkeypatch):
     monkeypatch.setattr(type(target), "replace", recording_replace)
     write_jsonl(target, [make_record()])
 
-    assert len(replacements) == 1
-    assert replacements[0][0].parent == target.parent
-    assert replacements[0][1] == target
+    assert replacements[-1][0].parent == target.parent
+    assert replacements[-1][1] == target
     assert list(tmp_path.iterdir()) == [target]
 
 
 def test_read_jsonl_reports_path_and_line(tmp_path):
     target = tmp_path / "records.jsonl"
     valid = json.dumps(make_record().to_dict(), ensure_ascii=False, sort_keys=True)
-    target.write_text(valid + '\n{"broken"\n', encoding="utf-8")
+    malformed = json.dumps({"source_id": "source-b"})
+    target.write_text(valid + "\n" + malformed + "\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match=rf"{target}:2"):
         read_jsonl(target, SourceRecord)

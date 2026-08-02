@@ -638,6 +638,63 @@ def test_staged_scope_rejects_git_blob_at_limit(tmp_path: Path):
         )
 
 
+@pytest.mark.parametrize("relative_path", [".env", "notes/unrelated.json"])
+def test_staged_scope_rejects_every_unowned_repository_path(
+    tmp_path: Path, relative_path: str
+):
+    output, descriptors, archive, required = _staged_capture_fixture(tmp_path)
+    unrelated = tmp_path / relative_path
+    unrelated.parent.mkdir(parents=True, exist_ok=True)
+    unrelated.write_bytes(b"not capture output")
+
+    with pytest.raises(CoverageError, match="unexpected staged path"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=(*required, relative_path),
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+
+def test_staged_scope_rejects_lexical_symlink_substitution_for_required_shard(
+    tmp_path: Path,
+):
+    output, descriptors, archive, required = _staged_capture_fixture(tmp_path)
+    shard_path = next(
+        path for path in required if path.endswith("part-001.jsonl.gz")
+    )
+    target = tmp_path / shard_path
+    direct_link = tmp_path / "shard-link.jsonl.gz"
+    direct_link.symlink_to(target)
+    substituted = tuple(
+        "shard-link.jsonl.gz" if path == shard_path else path for path in required
+    )
+    with pytest.raises(CoverageError, match="staged symlink is forbidden"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=substituted,
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+    parent_link = tmp_path / "capture-link"
+    parent_link.symlink_to(output, target_is_directory=True)
+    through_parent = f"capture-link/{target.name}"
+    substituted = tuple(
+        through_parent if path == shard_path else path for path in required
+    )
+    with pytest.raises(CoverageError, match="staged symlinked parent is forbidden"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=substituted,
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+
 def _locked_cli_fixture(
     tmp_path: Path,
 ) -> tuple[Path, tuple[JsonlArtifactDescriptor, ...], Path, tuple[str, ...]]:

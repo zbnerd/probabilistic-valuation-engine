@@ -1696,7 +1696,16 @@ def _verify_staged_capture_scope(
     except ValueError as error:
         raise CoverageError("capture output is outside repository") from error
 
-    def confined(path: Path) -> Path:
+    def lexical(path: Path) -> Path:
+        return Path(os.path.abspath(path))
+
+    def repository_key(path: Path) -> str:
+        try:
+            return lexical(path).relative_to(repository).as_posix()
+        except ValueError as error:
+            raise CoverageError(f"staged path is outside repository: {path}") from error
+
+    def verify_confinement(path: Path) -> Path:
         try:
             resolved = path.resolve(strict=True)
         except OSError as error:
@@ -1707,7 +1716,7 @@ def _verify_staged_capture_scope(
             raise CoverageError(f"staged path is outside repository: {path}") from error
         return resolved
 
-    required_paths: list[Path] = []
+    required_paths: list[str] = []
     for descriptor in ledger_artifacts:
         for physical in descriptor.physical_paths:
             relative = Path(physical)
@@ -1715,58 +1724,74 @@ def _verify_staged_capture_scope(
                 raise CoverageError(
                     f"capture ledger physical path is not a basename: {physical}"
                 )
-            required_paths.append(confined(capture_root / relative))
-    required_paths.extend(
-        confined(capture_root / name)
-        for name in (
-            SNAPSHOT_NAME,
-            "commit_inventory.csv",
-            COVERAGE_JSON_NAME,
-            COVERAGE_MARKDOWN_NAME,
-        )
-    )
-    required_paths.extend(confined(path) for path in archive_paths)
+            required_path = lexical(capture_root / relative)
+            verify_confinement(required_path)
+            required_paths.append(repository_key(required_path))
+    for name in (
+        SNAPSHOT_NAME,
+        "commit_inventory.csv",
+        COVERAGE_JSON_NAME,
+        COVERAGE_MARKDOWN_NAME,
+    ):
+        required_path = lexical(capture_root / name)
+        verify_confinement(required_path)
+        required_paths.append(repository_key(required_path))
+    for path in archive_paths:
+        required_path = lexical(path)
+        verify_confinement(required_path)
+        required_paths.append(repository_key(required_path))
     required = set(required_paths)
 
-    staged: list[Path] = []
+    staged: list[str] = []
     for raw in staged_output_paths:
         supplied = Path(raw)
         candidate = supplied if supplied.is_absolute() else repository / supplied
-        resolved = confined(candidate)
-        lexical_parts = supplied.parts
-        if supplied.name == ".gitignore":
-            raise CoverageError(f"staged .gitignore is forbidden: {supplied}")
-        if ".github-checkpoints" in lexical_parts:
+        staged_path = lexical(candidate)
+        staged_key = repository_key(staged_path)
+        relative = Path(staged_key)
+        if relative.name == ".gitignore":
+            raise CoverageError(f"staged .gitignore is forbidden: {staged_key}")
+        if ".github-checkpoints" in relative.parts:
             raise CoverageError(
-                f".github-checkpoints member is forbidden: {supplied}"
+                f".github-checkpoints member is forbidden: {staged_key}"
             )
-        if supplied.suffix.lower() == ".pdf":
+        if relative.suffix.lower() == ".pdf":
             raise CoverageError(
-                f"external original path/basename is forbidden: {supplied}"
+                f"external original path/basename is forbidden: {staged_key}"
             )
-        if resolved.stat().st_size >= 95_000_000:
-            raise CoverageError(f"staged Git blob limit: {supplied}")
-        staged.append(resolved)
+        member = repository
+        for index, part in enumerate(relative.parts):
+            member /= part
+            if not member.is_symlink():
+                continue
+            if index == len(relative.parts) - 1:
+                raise CoverageError(f"staged symlink is forbidden: {staged_key}")
+            raise CoverageError(
+                f"staged symlinked parent is forbidden: {staged_key}"
+            )
+        verify_confinement(staged_path)
+        if staged_path.stat().st_size >= 95_000_000:
+            raise CoverageError(f"staged Git blob limit: {staged_key}")
+        staged.append(staged_key)
 
     if len(staged) != len(set(staged)):
         raise CoverageError("duplicate staged capture path")
     staged_set = set(staged)
-    missing = sorted(required - staged_set, key=lambda path: _utf8(path.as_posix()))
+    missing = sorted(required - staged_set, key=_utf8)
     if missing:
         raise CoverageError(f"required staged artifact is absent: {missing[0]}")
-    extras = sorted(
-        (
-            path
-            for path in staged_set - required
-            if path == capture_root or capture_root in path.parents
-        ),
-        key=lambda path: _utf8(path.as_posix()),
-    )
+    extras = sorted(staged_set - required, key=_utf8)
     if extras:
         extra = extras[0]
-        if re.fullmatch(r".+-part-[0-9]{3}\.jsonl\.gz", extra.name):
+        capture_key = repository_key(capture_root)
+        under_capture = extra == capture_key or extra.startswith(capture_key + "/")
+        if under_capture and re.fullmatch(
+            r".+-part-[0-9]{3}\.jsonl\.gz", Path(extra).name
+        ):
             raise CoverageError(f"unindexed shard: {extra}")
-        raise CoverageError(f"staged capture artifact is unowned: {extra}")
+        if under_capture:
+            raise CoverageError(f"staged capture artifact is unowned: {extra}")
+        raise CoverageError(f"unexpected staged path: {extra}")
 
 
 def verify_capture_files(

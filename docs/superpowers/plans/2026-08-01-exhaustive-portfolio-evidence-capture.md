@@ -754,6 +754,7 @@ git commit -m "feat(portfolio): verify exhaustive source capture"
 - Generate: `docs/Portfolio_Book/output/research/ai_trace_inventory.jsonl`
 - Generate: `docs/Portfolio_Book/output/research/capture_coverage_manifest.json`
 - Generate: `docs/Portfolio_Book/output/research/capture_coverage_manifest.md`
+- Generate: `docs/Portfolio_Book/output/research/*-part-[0-9][0-9][0-9].jsonl.gz`
 - Generate: `docs/Portfolio_Book/output/research/commit-diffs-*.tar.gz`
 - Generate: `docs/Portfolio_Book/output/research/github-records-*.tar.gz`
 - Generate: `docs/Portfolio_Book/output/research/ai-trace-records-*.tar.gz`
@@ -765,6 +766,8 @@ git commit -m "feat(portfolio): verify exhaustive source capture"
 - Produces: the immutable input to the case/content plan.
 
 - [ ] **Step 1: Record the clean cutoff and run the resumable capture**
+
+**Resume note:** The present run must not execute `capture-snapshot`; resume `collect-all` from the existing unfinalized `snapshot_manifest.json` and its existing 20,656 checkpoints and archive volumes without deleting or rebuilding them. The snapshot-creation command below remains only as the historical record of how this run began.
 
 ```bash
 set -euo pipefail
@@ -802,7 +805,7 @@ Run secret scanning over generated text/JSONL and every safe archive member, ver
 
 ```bash
 set -euo pipefail
-cd /home/maple/probabilistic-valuation-engine
+cd /home/maple/probabilistic-valuation-engine/.worktrees/exhaustive-portfolio-rebuild
 git add docs/Portfolio_Book/output/research/snapshot_manifest.json \
   docs/Portfolio_Book/output/research/source_records.jsonl \
   docs/Portfolio_Book/output/research/document_claim_inventory.jsonl \
@@ -812,12 +815,22 @@ git add docs/Portfolio_Book/output/research/snapshot_manifest.json \
   docs/Portfolio_Book/output/research/ai_trace_inventory.jsonl \
   docs/Portfolio_Book/output/research/capture_coverage_manifest.json \
   docs/Portfolio_Book/output/research/capture_coverage_manifest.md
+python3 docs/Portfolio_Book/tools/run_portfolio_command.py -- uv run portfolio-book \
+  list-locked-jsonl-shards \
+  --coverage docs/Portfolio_Book/output/research/capture_coverage_manifest.json \
+  --repo . \
+  | git add -f --pathspec-from-file=- --pathspec-file-nul
 find docs/Portfolio_Book/output/research -maxdepth 1 \
   -type f \( -name 'commit-diffs-*.tar.gz' \
   -o -name 'github-records-*.tar.gz' \
   -o -name 'ai-trace-records-*.tar.gz' \
   -o -name 'document-records-*.tar.gz' \) \
   -print0 | xargs -0 -r git add -f --
+cd docs/Portfolio_Book
+python3 tools/run_portfolio_command.py -- uv run portfolio-book verify-source-capture \
+  --manifest output/research/snapshot_manifest.json \
+  --root output/research
+cd ../..
 git diff --cached --check
 git commit -m "docs(portfolio): capture exhaustive evidence snapshot"
 ```

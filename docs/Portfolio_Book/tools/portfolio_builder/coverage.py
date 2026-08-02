@@ -10,20 +10,22 @@ import csv
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tarfile
 import tempfile
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 from .ai_trace_collector import collect_ai_traces
-from .canonical_io import read_jsonl, write_jsonl
+from .canonical_io import read_jsonl_with_descriptor, write_jsonl
 from .document_collector import collect_documents
 from .git_collector import EMPTY_TREE_SHA, GitCapture, collect_git_evidence
 from .github_client import CheckpointStore, GitHubClient, is_exact_patch_variant
 from .github_collector import REPOSITORY, ReconciliationResult, reconcile_github
+from .jsonl_artifact import JsonlArtifactDescriptor
 from .models import (
     DocumentClaim,
     GitHubEndpointFingerprint,
@@ -46,6 +48,17 @@ SOURCE_NAME = "source_records.jsonl"
 CLAIM_NAME = "document_claim_inventory.jsonl"
 COVERAGE_JSON_NAME = "capture_coverage_manifest.json"
 COVERAGE_MARKDOWN_NAME = "capture_coverage_manifest.md"
+PR_INVENTORY_NAME = "pr_inventory.jsonl"
+ISSUE_INVENTORY_NAME = "issue_inventory.jsonl"
+AI_INVENTORY_NAME = "ai_trace_inventory.jsonl"
+
+CAPTURE_LEDGER_SPECS = (
+    (AI_INVENTORY_NAME, SourceRecord),
+    (CLAIM_NAME, DocumentClaim),
+    (ISSUE_INVENTORY_NAME, SourceRecord),
+    (PR_INVENTORY_NAME, SourceRecord),
+    (SOURCE_NAME, SourceRecord),
+)
 
 
 class CoverageError(ValueError):
@@ -141,6 +154,7 @@ class CaptureCoverageManifest:
     archive_count: int
     sections: dict[str, CoverageSection]
     limitations: tuple[str, ...]
+    ledger_artifacts: tuple[JsonlArtifactDescriptor, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -157,6 +171,7 @@ class CaptureCoverageManifest:
                 for key in sorted(self.sections, key=_utf8)
             },
             "limitations": list(self.limitations),
+            "ledger_artifacts": [item.to_dict() for item in self.ledger_artifacts],
         }
 
 
@@ -1497,13 +1512,35 @@ def _write_commit_csv(path: Path, records: Iterable[SourceRecord]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _is_pr_inventory_source(value: SourceRecord) -> bool:
+    return value.source_type.startswith("github-") and (
+        "/pull" in value.source_locator or value.source_id.startswith("GH-PR-")
+    )
+
+
+def _is_issue_inventory_source(value: SourceRecord) -> bool:
+    return (
+        value.source_type.startswith("github-")
+        and "/issues/" in value.source_locator
+    )
+
+
+def _is_ai_inventory_source(value: SourceRecord) -> bool:
+    return value.source_type.startswith("ai-trace-")
+
+
 def _specialized_inventory(
-    output_dir: Path, name: str, sources: Iterable[SourceRecord], predicate
-) -> None:
-    write_jsonl(
+    output_dir: Path,
+    name: str,
+    sources: Iterable[SourceRecord],
+    predicate: Callable[[SourceRecord], bool],
+) -> JsonlArtifactDescriptor:
+    frozen_sources = tuple(sources)
+    return write_jsonl(
         output_dir / name,
-        tuple(source for source in sources if predicate(source)),
-        source_universe=tuple(sources),
+        tuple(source for source in frozen_sources if predicate(source)),
+        model_type=SourceRecord,
+        source_universe=frozen_sources,
     )
 
 
@@ -1587,26 +1624,149 @@ def collect_all(
     # Finalization happens only after every collector and reconciliation gate
     # succeeds.  Canonical ledgers are atomically replaced before the immutable
     # snapshot is marked final.
-    write_jsonl(output / SOURCE_NAME, sources, claim_universe=claims)
-    write_jsonl(
-        output / CLAIM_NAME,
-        claims,
-        source_universe=sources,
-        claim_universe=claims,
+    descriptors = [
+        write_jsonl(
+            output / SOURCE_NAME,
+            sources,
+            model_type=SourceRecord,
+            claim_universe=claims,
+        ),
+        write_jsonl(
+            output / CLAIM_NAME,
+            claims,
+            model_type=DocumentClaim,
+            source_universe=sources,
+            claim_universe=claims,
+        ),
+        _specialized_inventory(
+            output, PR_INVENTORY_NAME, sources, _is_pr_inventory_source
+        ),
+        _specialized_inventory(
+            output, ISSUE_INVENTORY_NAME, sources, _is_issue_inventory_source
+        ),
+        _specialized_inventory(
+            output, AI_INVENTORY_NAME, sources, _is_ai_inventory_source
+        ),
+    ]
+    coverage = replace(
+        coverage,
+        ledger_artifacts=tuple(
+            sorted(descriptors, key=lambda item: _utf8(item.logical_path))
+        ),
     )
     _write_commit_csv(output / "commit_inventory.csv", sources)
-    _specialized_inventory(
-        output, "pr_inventory.jsonl", sources, lambda value: value.source_type.startswith("github-") and ("/pull" in value.source_locator or value.source_id.startswith("GH-PR-"))
-    )
-    _specialized_inventory(
-        output, "issue_inventory.jsonl", sources, lambda value: value.source_type.startswith("github-") and "/issues/" in value.source_locator
-    )
-    _specialized_inventory(
-        output, "ai_trace_inventory.jsonl", sources, lambda value: value.source_type.startswith("ai-trace-")
-    )
     write_coverage_manifest(output, coverage)
     write_snapshot_manifest(snapshot_path, final_snapshot)
     return CaptureArtifacts(final_snapshot, sources, tuple(claims), coverage, archive_paths)
+
+
+def _locked_ledger_artifacts(
+    locked_coverage: Mapping[str, object],
+) -> tuple[JsonlArtifactDescriptor, ...]:
+    raw_artifacts = locked_coverage.get("ledger_artifacts")
+    if not isinstance(raw_artifacts, list):
+        raise CoverageError("locked capture ledger artifacts are absent")
+    try:
+        artifacts = tuple(
+            JsonlArtifactDescriptor.from_dict(item) for item in raw_artifacts
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise CoverageError("locked capture ledger artifact is malformed") from error
+    names = tuple(item.logical_path for item in artifacts)
+    expected_names = tuple(name for name, _model_type in CAPTURE_LEDGER_SPECS)
+    if names != expected_names or len(set(names)) != len(expected_names):
+        raise CoverageError("locked capture ledger artifact names mismatch")
+    return artifacts
+
+
+def _verify_staged_capture_scope(
+    *,
+    repo: Path,
+    output_dir: Path,
+    staged_output_paths: tuple[str | Path, ...],
+    ledger_artifacts: tuple[JsonlArtifactDescriptor, ...],
+    archive_paths: tuple[Path, ...],
+) -> None:
+    if not staged_output_paths:
+        return
+    repository = repo.resolve(strict=True)
+    capture_root = output_dir.resolve(strict=True)
+    try:
+        capture_root.relative_to(repository)
+    except ValueError as error:
+        raise CoverageError("capture output is outside repository") from error
+
+    def confined(path: Path) -> Path:
+        try:
+            resolved = path.resolve(strict=True)
+        except OSError as error:
+            raise CoverageError(f"staged path is unavailable: {path}") from error
+        try:
+            resolved.relative_to(repository)
+        except ValueError as error:
+            raise CoverageError(f"staged path is outside repository: {path}") from error
+        return resolved
+
+    required_paths: list[Path] = []
+    for descriptor in ledger_artifacts:
+        for physical in descriptor.physical_paths:
+            relative = Path(physical)
+            if relative.is_absolute() or relative.parent != Path("."):
+                raise CoverageError(
+                    f"capture ledger physical path is not a basename: {physical}"
+                )
+            required_paths.append(confined(capture_root / relative))
+    required_paths.extend(
+        confined(capture_root / name)
+        for name in (
+            SNAPSHOT_NAME,
+            "commit_inventory.csv",
+            COVERAGE_JSON_NAME,
+            COVERAGE_MARKDOWN_NAME,
+        )
+    )
+    required_paths.extend(confined(path) for path in archive_paths)
+    required = set(required_paths)
+
+    staged: list[Path] = []
+    for raw in staged_output_paths:
+        supplied = Path(raw)
+        candidate = supplied if supplied.is_absolute() else repository / supplied
+        resolved = confined(candidate)
+        lexical_parts = supplied.parts
+        if supplied.name == ".gitignore":
+            raise CoverageError(f"staged .gitignore is forbidden: {supplied}")
+        if ".github-checkpoints" in lexical_parts:
+            raise CoverageError(
+                f".github-checkpoints member is forbidden: {supplied}"
+            )
+        if supplied.suffix.lower() == ".pdf":
+            raise CoverageError(
+                f"external original path/basename is forbidden: {supplied}"
+            )
+        if resolved.stat().st_size >= 95_000_000:
+            raise CoverageError(f"staged Git blob limit: {supplied}")
+        staged.append(resolved)
+
+    if len(staged) != len(set(staged)):
+        raise CoverageError("duplicate staged capture path")
+    staged_set = set(staged)
+    missing = sorted(required - staged_set, key=lambda path: _utf8(path.as_posix()))
+    if missing:
+        raise CoverageError(f"required staged artifact is absent: {missing[0]}")
+    extras = sorted(
+        (
+            path
+            for path in staged_set - required
+            if path == capture_root or capture_root in path.parents
+        ),
+        key=lambda path: _utf8(path.as_posix()),
+    )
+    if extras:
+        extra = extras[0]
+        if re.fullmatch(r".+-part-[0-9]{3}\.jsonl\.gz", extra.name):
+            raise CoverageError(f"unindexed shard: {extra}")
+        raise CoverageError(f"staged capture artifact is unowned: {extra}")
 
 
 def verify_capture_files(
@@ -1618,18 +1778,21 @@ def verify_capture_files(
 ) -> CaptureCoverageManifest:
     """Reload and re-verify an already finalized source capture."""
     output = Path(output_dir)
+    staged = tuple(staged_output_paths)
     payload = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("snapshot manifest must be a JSON object")
     snapshot = SnapshotManifest.from_dict(payload)
-    sources = tuple(read_jsonl(output / SOURCE_NAME, SourceRecord))
-    claims = tuple(
-        read_jsonl(
-            output / CLAIM_NAME,
-            DocumentClaim,
-            source_universe=sources,
-        )
+    source_values, source_descriptor = read_jsonl_with_descriptor(
+        output / SOURCE_NAME, SourceRecord
     )
+    sources = tuple(source_values)
+    claim_values, claim_descriptor = read_jsonl_with_descriptor(
+        output / CLAIM_NAME,
+        DocumentClaim,
+        source_universe=sources,
+    )
+    claims = tuple(claim_values)
     coverage_path = output / COVERAGE_JSON_NAME
     try:
         locked_coverage = json.loads(coverage_path.read_text(encoding="utf-8"))
@@ -1637,14 +1800,50 @@ def verify_capture_files(
         raise CoverageError("locked capture coverage manifest is unreadable") from error
     if not isinstance(locked_coverage, dict):
         raise CoverageError("locked capture coverage manifest must be an object")
+    locked_artifacts = _locked_ledger_artifacts(locked_coverage)
+    current_descriptors: list[JsonlArtifactDescriptor] = [
+        source_descriptor,
+        claim_descriptor,
+    ]
+    specialized = (
+        (PR_INVENTORY_NAME, _is_pr_inventory_source),
+        (ISSUE_INVENTORY_NAME, _is_issue_inventory_source),
+        (AI_INVENTORY_NAME, _is_ai_inventory_source),
+    )
+    for name, predicate in specialized:
+        values, descriptor = read_jsonl_with_descriptor(
+            output / name,
+            SourceRecord,
+            source_universe=sources,
+            claim_universe=claims,
+        )
+        expected = [source for source in sources if predicate(source)]
+        if values != expected:
+            raise CoverageError(f"specialized inventory mismatch: {name}")
+        current_descriptors.append(descriptor)
+    current_artifacts = tuple(
+        sorted(current_descriptors, key=lambda item: _utf8(item.logical_path))
+    )
+    if tuple(item.to_dict() for item in locked_artifacts) != tuple(
+        item.to_dict() for item in current_artifacts
+    ):
+        raise CoverageError("locked capture ledger artifact mismatch")
     archives = tuple(sorted(output.glob("*.tar.gz"), key=lambda path: _utf8(path.name)))
-    return verify_source_capture(
+    recomputed = verify_source_capture(
         repo=repo,
         snapshot=snapshot,
         sources=sources,
         claims=claims,
         captured_ref_ids=capture_ref_ids(snapshot),
         archive_paths=archives,
-        staged_output_paths=staged_output_paths,
+        staged_output_paths=staged,
         locked_coverage=locked_coverage,
     )
+    _verify_staged_capture_scope(
+        repo=Path(repo),
+        output_dir=output,
+        staged_output_paths=staged,
+        ledger_artifacts=current_artifacts,
+        archive_paths=archives,
+    )
+    return replace(recomputed, ledger_artifacts=current_artifacts)

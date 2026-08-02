@@ -14,18 +14,34 @@ import pytest
 import portfolio_builder.cli as cli_module
 import portfolio_builder.coverage as coverage_module
 import portfolio_builder.github_collector as github_collector
+from portfolio_builder.canonical_io import read_jsonl_with_descriptor, write_jsonl
 from portfolio_builder.coverage import (
+    AI_INVENTORY_NAME,
+    CAPTURE_LEDGER_SPECS,
+    CLAIM_NAME,
+    COVERAGE_JSON_NAME,
+    COVERAGE_MARKDOWN_NAME,
+    ISSUE_INVENTORY_NAME,
+    PR_INVENTORY_NAME,
+    SNAPSHOT_NAME,
+    SOURCE_NAME,
     CaptureCoverageManifest,
     CoverageSection,
     CoverageError,
+    _verify_staged_capture_scope,
     capture_ref_ids,
     collect_all,
     verify_archive_members,
+    verify_capture_files,
     verify_source_capture,
 )
 from portfolio_builder.git_collector import GitCapture
 from portfolio_builder.github_collector import ReconciliationPass, ReconciliationResult
 from portfolio_builder.github_client import GitHubPage
+from portfolio_builder.jsonl_artifact import (
+    JsonlArtifactDescriptor,
+    publish_jsonl_artifact,
+)
 from portfolio_builder.models import (
     DocumentClaim,
     ExplicitRelation,
@@ -140,6 +156,59 @@ def _hash(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _plain_descriptor(
+    name: str, record_type: str, record_count: int
+) -> JsonlArtifactDescriptor:
+    digest = hashlib.sha256(b"").hexdigest()
+    return JsonlArtifactDescriptor(
+        schema_version=1,
+        storage_mode="plain",
+        logical_path=name,
+        logical_file_byte_count=0,
+        logical_file_sha256=digest,
+        record_type=record_type,
+        record_count=record_count,
+        canonical_byte_count=0,
+        canonical_sha256=digest,
+        shards=(),
+    )
+
+
+def test_capture_coverage_locks_all_logical_ledger_artifacts():
+    artifacts = (
+        _plain_descriptor("source_records.jsonl", "SourceRecord", 0),
+        _plain_descriptor("document_claim_inventory.jsonl", "DocumentClaim", 0),
+        _plain_descriptor("pr_inventory.jsonl", "SourceRecord", 0),
+        _plain_descriptor("issue_inventory.jsonl", "SourceRecord", 0),
+        _plain_descriptor("ai_trace_inventory.jsonl", "SourceRecord", 0),
+    )
+    manifest = CaptureCoverageManifest(
+        schema_version=1,
+        phase="capture",
+        status="complete",
+        snapshot_id="snap-1",
+        source_record_count=3,
+        document_claim_count=1,
+        relation_count=0,
+        archive_count=0,
+        sections={},
+        limitations=(),
+        ledger_artifacts=tuple(
+            sorted(artifacts, key=lambda item: item.logical_path.encode("utf-8"))
+        ),
+    )
+
+    payload = manifest.to_dict()
+    assert [item["logical_path"] for item in payload["ledger_artifacts"]] == [
+        "ai_trace_inventory.jsonl",
+        "document_claim_inventory.jsonl",
+        "issue_inventory.jsonl",
+        "pr_inventory.jsonl",
+        "source_records.jsonl",
+    ]
+    assert all(item["logical_file_sha256"] for item in payload["ledger_artifacts"])
+
+
 def _source(
     source_id: str,
     source_type: str,
@@ -234,6 +303,485 @@ def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
         ),
         external_path,
     )
+
+
+def test_verify_capture_files_reconstructs_specialized_inventory_semantics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    output = tmp_path / "docs/Portfolio_Book/output/research"
+    output.mkdir(parents=True)
+    snapshot, _ = _snapshot(tmp_path)
+    snapshot_path = output / SNAPSHOT_NAME
+    snapshot_path.write_bytes(
+        json.dumps(snapshot.to_dict(), sort_keys=True, separators=(",", ":")).encode()
+        + b"\n"
+    )
+    pull = _source(
+        "GH-PR-7",
+        "github-pull-request",
+        locator="github:/repos/o/r/pulls/7",
+        members=(),
+    )
+    non_pull = _source("GIT-a", "git-commit", members=())
+    sources = (pull, non_pull)
+    descriptors = [
+        write_jsonl(
+            output / SOURCE_NAME,
+            sources,
+            model_type=SourceRecord,
+            target_bytes=32,
+            max_compressed_bytes=10_000,
+        ),
+        write_jsonl(output / CLAIM_NAME, (), model_type=DocumentClaim),
+        write_jsonl(
+            output / PR_INVENTORY_NAME,
+            (pull,),
+            model_type=SourceRecord,
+            source_universe=sources,
+            target_bytes=32,
+            max_compressed_bytes=10_000,
+        ),
+        write_jsonl(
+            output / ISSUE_INVENTORY_NAME,
+            (),
+            model_type=SourceRecord,
+            source_universe=sources,
+        ),
+        write_jsonl(
+            output / AI_INVENTORY_NAME,
+            (),
+            model_type=SourceRecord,
+            source_universe=sources,
+        ),
+    ]
+    section = CoverageSection.complete((), ())
+    locked = CaptureCoverageManifest(
+        1,
+        "capture",
+        "complete",
+        snapshot.snapshot_id,
+        len(sources),
+        0,
+        0,
+        0,
+        {"refs": section, "git_commits": section},
+        (),
+        tuple(sorted(descriptors, key=lambda item: item.logical_path.encode("utf-8"))),
+    )
+    (output / COVERAGE_JSON_NAME).write_bytes(
+        json.dumps(locked.to_dict(), sort_keys=True, separators=(",", ":")).encode()
+        + b"\n"
+    )
+    monkeypatch.setattr(
+        coverage_module,
+        "verify_source_capture",
+        lambda **_kwargs: replace(locked, ledger_artifacts=()),
+    )
+
+    verified = verify_capture_files(
+        repo=tmp_path,
+        snapshot_path=snapshot_path,
+        output_dir=output,
+    )
+    assert verified.ledger_artifacts == locked.ledger_artifacts
+
+    first = locked.ledger_artifacts[0]
+    mismatched = (
+        replace(first, canonical_sha256="f" * 64),
+        *locked.ledger_artifacts[1:],
+    )
+    (output / COVERAGE_JSON_NAME).write_bytes(
+        json.dumps(
+            replace(locked, ledger_artifacts=mismatched).to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        + b"\n"
+    )
+    with pytest.raises(CoverageError, match="locked capture ledger artifact mismatch"):
+        verify_capture_files(
+            repo=tmp_path,
+            snapshot_path=snapshot_path,
+            output_dir=output,
+        )
+
+    replacement = write_jsonl(
+        output / PR_INVENTORY_NAME,
+        (non_pull,),
+        model_type=SourceRecord,
+        source_universe=sources,
+        target_bytes=32,
+        max_compressed_bytes=10_000,
+    )
+    updated = tuple(
+        replacement if item.logical_path == PR_INVENTORY_NAME else item
+        for item in locked.ledger_artifacts
+    )
+    (output / COVERAGE_JSON_NAME).write_bytes(
+        json.dumps(
+            replace(locked, ledger_artifacts=updated).to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        + b"\n"
+    )
+
+    with pytest.raises(
+        CoverageError, match="specialized inventory mismatch: pr_inventory.jsonl"
+    ):
+        verify_capture_files(
+            repo=tmp_path,
+            snapshot_path=snapshot_path,
+            output_dir=output,
+        )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "extra"])
+def test_locked_capture_ledger_names_are_an_exact_five_member_union(mutation: str):
+    descriptors = tuple(
+        _plain_descriptor(name, model_type.__name__, 0)
+        for name, model_type in CAPTURE_LEDGER_SPECS
+    )
+    if mutation == "missing":
+        changed = descriptors[:-1]
+    elif mutation == "duplicate":
+        changed = (*descriptors[:-1], descriptors[0])
+    else:
+        changed = (*descriptors, _plain_descriptor("extra.jsonl", "SourceRecord", 0))
+
+    with pytest.raises(CoverageError, match="ledger artifact names mismatch"):
+        coverage_module._locked_ledger_artifacts(
+            {"ledger_artifacts": [item.to_dict() for item in changed]}
+        )
+
+
+def test_specialized_capture_ledgers_preserve_exact_filtered_source_order(
+    tmp_path: Path,
+):
+    sources = (
+        _source(
+            "GH-ISSUE-8",
+            "github-issue",
+            locator="github:/repos/o/r/issues/8",
+            members=(),
+        ),
+        _source("GH-PR-7", "github-pull-request", members=()),
+        _source(
+            "GH-PR-FILE-7",
+            "github-pr-file",
+            locator="github:/repos/o/r/pulls/7/files#file:a",
+            members=(),
+        ),
+        _source("AI-FILE", "ai-trace-file", members=()),
+        _source("GIT-a", "git-commit", members=()),
+    )
+    cases = (
+        (
+            PR_INVENTORY_NAME,
+            coverage_module._is_pr_inventory_source,
+            ("GH-PR-7", "GH-PR-FILE-7"),
+        ),
+        (
+            ISSUE_INVENTORY_NAME,
+            coverage_module._is_issue_inventory_source,
+            ("GH-ISSUE-8",),
+        ),
+        (
+            AI_INVENTORY_NAME,
+            coverage_module._is_ai_inventory_source,
+            ("AI-FILE",),
+        ),
+    )
+    for name, predicate, expected_ids in cases:
+        descriptor = coverage_module._specialized_inventory(
+            tmp_path, name, sources, predicate
+        )
+        records, inspected = read_jsonl_with_descriptor(
+            tmp_path / name,
+            SourceRecord,
+            source_universe=sources,
+        )
+        assert tuple(record.source_id for record in records) == expected_ids
+        assert inspected == descriptor
+
+
+def _staged_capture_fixture(
+    tmp_path: Path,
+) -> tuple[Path, tuple[JsonlArtifactDescriptor, ...], Path, tuple[str, ...]]:
+    output = tmp_path / "docs/Portfolio_Book/output/research"
+    output.mkdir(parents=True, exist_ok=True)
+    source = _source("source-a", "git-commit", members=())
+    descriptors = [
+        write_jsonl(
+            output / SOURCE_NAME,
+            [source],
+            model_type=SourceRecord,
+            target_bytes=32,
+            max_compressed_bytes=10_000,
+        )
+    ]
+    for name, model_type in CAPTURE_LEDGER_SPECS:
+        if name == SOURCE_NAME:
+            continue
+        descriptors.append(write_jsonl(output / name, [], model_type=model_type))
+    archive = output / "commit-diffs-001.tar.gz"
+    archive.write_bytes(b"safe archive fixture")
+    for name in (
+        SNAPSHOT_NAME,
+        "commit_inventory.csv",
+        COVERAGE_JSON_NAME,
+        COVERAGE_MARKDOWN_NAME,
+    ):
+        (output / name).write_bytes(b"fixture")
+    required = tuple(
+        sorted(
+            (
+                *(output / physical for item in descriptors for physical in item.physical_paths),
+                archive,
+                output / SNAPSHOT_NAME,
+                output / "commit_inventory.csv",
+                output / COVERAGE_JSON_NAME,
+                output / COVERAGE_MARKDOWN_NAME,
+            ),
+            key=lambda item: item.name.encode("utf-8"),
+        )
+    )
+    return (
+        output,
+        tuple(descriptors),
+        archive,
+        tuple(path.relative_to(tmp_path).as_posix() for path in required),
+    )
+
+
+def test_staged_scope_requires_exact_index_owned_shard_union(tmp_path: Path):
+    output, descriptors, archive, required = _staged_capture_fixture(tmp_path)
+
+    _verify_staged_capture_scope(
+        repo=tmp_path,
+        output_dir=output,
+        staged_output_paths=required,
+        ledger_artifacts=descriptors,
+        archive_paths=(archive,),
+    )
+
+    missing = tuple(
+        path for path in required if not path.endswith("part-001.jsonl.gz")
+    )
+    with pytest.raises(CoverageError, match="required staged artifact is absent"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=missing,
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+    extra = output / "source_records-part-999.jsonl.gz"
+    extra.write_bytes(b"extra")
+    with pytest.raises(CoverageError, match="unindexed shard"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=(*required, extra.relative_to(tmp_path).as_posix()),
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "message"),
+    [
+        ("private/resume.pdf", "external original path/basename"),
+        (".gitignore", "staged .gitignore is forbidden"),
+        (
+            "docs/Portfolio_Book/output/research/.github-checkpoints/cache.json",
+            ".github-checkpoints member is forbidden",
+        ),
+        (
+            "docs/Portfolio_Book/output/research/unowned-research.json",
+            "staged capture artifact is unowned",
+        ),
+    ],
+)
+def test_staged_scope_rejects_forbidden_or_unowned_paths(
+    tmp_path: Path, relative_path: str, message: str
+):
+    output, descriptors, archive, required = _staged_capture_fixture(tmp_path)
+    extra = tmp_path / relative_path
+    extra.parent.mkdir(parents=True, exist_ok=True)
+    extra.write_bytes(b"extra")
+
+    with pytest.raises(CoverageError, match=message):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=(*required, relative_path),
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+
+def test_staged_scope_rejects_git_blob_at_limit(tmp_path: Path):
+    output, descriptors, archive, required = _staged_capture_fixture(tmp_path)
+    large = tmp_path / "large-capture.bin"
+    with large.open("wb") as stream:
+        stream.truncate(95_000_000)
+
+    with pytest.raises(CoverageError, match="staged Git blob limit"):
+        _verify_staged_capture_scope(
+            repo=tmp_path,
+            output_dir=output,
+            staged_output_paths=(*required, "large-capture.bin"),
+            ledger_artifacts=descriptors,
+            archive_paths=(archive,),
+        )
+
+
+def _locked_cli_fixture(
+    tmp_path: Path,
+) -> tuple[Path, tuple[JsonlArtifactDescriptor, ...], Path, tuple[str, ...]]:
+    output = tmp_path / "docs/Portfolio_Book/output/research"
+    output.mkdir(parents=True, exist_ok=True)
+    source_line = json.dumps(
+        {"padding": "a" * 80, "source_id": "source-a"},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8") + b"\n"
+    descriptors = [
+        publish_jsonl_artifact(
+            output / SOURCE_NAME,
+            record_type="SourceRecord",
+            records=[("source-a", source_line)],
+            target_bytes=32,
+            max_compressed_bytes=10_000,
+        )
+    ]
+    for name, model_type in CAPTURE_LEDGER_SPECS:
+        if name == SOURCE_NAME:
+            continue
+        descriptors.append(
+            publish_jsonl_artifact(
+                output / name,
+                record_type=model_type.__name__,
+                records=(),
+            )
+        )
+    descriptors = sorted(
+        descriptors, key=lambda value: value.logical_path.encode("utf-8")
+    )
+    coverage_path = output / COVERAGE_JSON_NAME
+    coverage_path.write_bytes(
+        json.dumps(
+            {"ledger_artifacts": [item.to_dict() for item in descriptors]},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        + b"\n"
+    )
+    (output / "commit-diffs-001.tar.gz").write_bytes(b"archive")
+    (output / "source_records-part-999.jsonl.gz").write_bytes(b"unindexed")
+    checkpoint = output / ".github-checkpoints/cache.json"
+    checkpoint.parent.mkdir(exist_ok=True)
+    checkpoint.write_bytes(b"{}")
+    expected = tuple(
+        sorted(
+            (
+                (output / shard.path).relative_to(tmp_path).as_posix()
+                for descriptor in descriptors
+                for shard in descriptor.shards
+            ),
+            key=lambda value: value.encode("utf-8"),
+        )
+    )
+    return output, tuple(descriptors), coverage_path, expected
+
+
+def test_list_locked_jsonl_shards_emits_only_verified_nul_delimited_paths(
+    tmp_path: Path, capfdbinary: pytest.CaptureFixture[bytes]
+):
+    _output, _descriptors, coverage_path, expected = _locked_cli_fixture(tmp_path)
+
+    assert cli_module.main(
+        [
+            "list-locked-jsonl-shards",
+            "--coverage",
+            str(coverage_path),
+            "--repo",
+            str(tmp_path),
+        ]
+    ) == 0
+
+    captured = capfdbinary.readouterr().out
+    assert tuple(
+        value.decode("utf-8") for value in captured.split(b"\0") if value
+    ) == expected
+
+
+def test_list_locked_jsonl_shards_rejects_missing_or_changed_shard(tmp_path: Path):
+    output, descriptors, coverage_path, _expected = _locked_cli_fixture(tmp_path)
+    shard = output / descriptors[-1].shards[0].path
+    shard.unlink()
+    with pytest.raises(CoverageError, match="locked shard is unavailable"):
+        cli_module.main(
+            [
+                "list-locked-jsonl-shards",
+                "--coverage",
+                str(coverage_path),
+                "--repo",
+                str(tmp_path),
+            ]
+        )
+
+    _output, descriptors, coverage_path, _expected = _locked_cli_fixture(tmp_path)
+    shard = output / descriptors[-1].shards[0].path
+    value = shard.read_bytes()
+    shard.write_bytes(bytes([value[0] ^ 1]) + value[1:])
+    with pytest.raises(CoverageError, match="locked shard identity mismatch"):
+        cli_module.main(
+            [
+                "list-locked-jsonl-shards",
+                "--coverage",
+                str(coverage_path),
+                "--repo",
+                str(tmp_path),
+            ]
+        )
+
+
+def test_list_locked_jsonl_shards_rejects_outside_coverage_and_malformed_descriptor(
+    tmp_path: Path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _output, _descriptors, outside_coverage, _expected = _locked_cli_fixture(tmp_path)
+    with pytest.raises(CoverageError, match="coverage path is outside repository"):
+        cli_module.main(
+            [
+                "list-locked-jsonl-shards",
+                "--coverage",
+                str(outside_coverage),
+                "--repo",
+                str(repo),
+            ]
+        )
+
+    output = repo / "docs/Portfolio_Book/output/research"
+    output.mkdir(parents=True)
+    malformed = output / COVERAGE_JSON_NAME
+    malformed.write_bytes(b'{"ledger_artifacts":[{}]}\n')
+    with pytest.raises(CoverageError, match="locked capture ledger artifact is malformed"):
+        cli_module.main(
+            [
+                "list-locked-jsonl-shards",
+                "--coverage",
+                str(malformed),
+                "--repo",
+                str(repo),
+            ]
+        )
 
 
 def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
@@ -1513,10 +2061,28 @@ def test_collect_all_uses_existing_snapshot_orders_stages_and_finalizes_last(
     monkeypatch.setattr(coverage_module, "derive_explicit_relations", lambda sources: order.append("relations") or ())
     monkeypatch.setattr(coverage_module, "attach_explicit_relations", lambda sources, relations: tuple(sources))
     monkeypatch.setattr(coverage_module, "verify_source_capture", lambda **kwargs: order.append("coverage") or manifest)
-    monkeypatch.setattr(coverage_module, "write_jsonl", lambda *args, **kwargs: order.append("jsonl"))
+
+    def write_ledger(path, *args, **kwargs):
+        order.append("jsonl")
+        record_type = kwargs["model_type"].__name__
+        return _plain_descriptor(Path(path).name, record_type, 0)
+
+    monkeypatch.setattr(coverage_module, "write_jsonl", write_ledger)
     monkeypatch.setattr(coverage_module, "_write_commit_csv", lambda *args: order.append("csv"))
-    monkeypatch.setattr(coverage_module, "_specialized_inventory", lambda *args: order.append("inventory"))
-    monkeypatch.setattr(coverage_module, "write_coverage_manifest", lambda *args: order.append("coverage-write") or ())
+
+    def write_specialized(_output, name, _sources, _predicate):
+        order.append("inventory")
+        return _plain_descriptor(name, "SourceRecord", 0)
+
+    monkeypatch.setattr(coverage_module, "_specialized_inventory", write_specialized)
+    locked_manifests: list[CaptureCoverageManifest] = []
+
+    def write_coverage(_output, locked):
+        order.append("coverage-write")
+        locked_manifests.append(locked)
+        return ()
+
+    monkeypatch.setattr(coverage_module, "write_coverage_manifest", write_coverage)
     monkeypatch.setattr(coverage_module, "write_snapshot_manifest", lambda *args: order.append("finalize"))
 
     collect_all(
@@ -1527,6 +2093,10 @@ def test_collect_all_uses_existing_snapshot_orders_stages_and_finalizes_last(
         finalized_at="2026-08-01T00:00:03Z",
     )
     assert order[:6] == ["git", "documents", "ai", "github", "relations", "coverage"]
+    assert [
+        item.logical_path for item in locked_manifests[0].ledger_artifacts
+    ] == [name for name, _model_type in CAPTURE_LEDGER_SPECS]
+    assert order.index("coverage-write") < order.index("finalize")
     assert order[-1] == "finalize"
 
     order.clear()

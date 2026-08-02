@@ -457,14 +457,18 @@ def derive_explicit_relations(
     if len(source_ids) != len(set(source_ids)):
         raise ValueError("duplicate source ID while deriving relations")
     commits, pulls, issues, documents = _target_maps(frozen)
-    diff_hashes: dict[str, str] = {}
+    diff_hash_source_ids: dict[str, set[str]] = {}
     for source in frozen:
         if source.source_type == "git-diff":
             for value in (source.raw_hash, source.stored_hash):
-                existing = diff_hashes.get(value.lower())
-                if existing is not None and existing != source.source_id:
-                    raise ValueError(f"ambiguous exact diff hash: {value}")
-                diff_hashes[value.lower()] = source.source_id
+                diff_hash_source_ids.setdefault(value.lower(), set()).add(
+                    source.source_id
+                )
+    diff_hashes = {
+        value: next(iter(source_ids))
+        for value, source_ids in diff_hash_source_ids.items()
+        if len(source_ids) == 1
+    }
 
     candidates: list[RelationCandidate] = []
     for source in frozen:

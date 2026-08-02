@@ -403,6 +403,54 @@ def test_relation_derivation_accepts_only_exact_evidence_and_is_deterministic():
     )
 
 
+def test_explicit_diff_hash_relations_ignore_ambiguous_hashes_without_guessing():
+    ambiguous_hash = "a" * 64
+    unique_hash = "b" * 64
+    sources = (
+        _source(
+            "DIFF-AMBIGUOUS-A",
+            "git-diff",
+            raw_hash=ambiguous_hash,
+            stored_hash=ambiguous_hash,
+        ),
+        _source(
+            "DIFF-AMBIGUOUS-B",
+            "git-diff",
+            raw_hash=ambiguous_hash,
+            stored_hash=ambiguous_hash,
+        ),
+        _source(
+            "DIFF-UNIQUE",
+            "git-diff",
+            raw_hash=unique_hash,
+            stored_hash=unique_hash,
+        ),
+        _source(
+            "AI-AMBIGUOUS",
+            "ai-trace-entry",
+            payload={"patch_sha256": ambiguous_hash},
+        ),
+        _source(
+            "AI-UNIQUE",
+            "ai-trace-entry",
+            payload={"patch_sha256": unique_hash},
+        ),
+    )
+
+    forward = derive_explicit_relations(sources)
+    reversed_order = derive_explicit_relations(tuple(reversed(sources)))
+
+    assert [item.to_dict() for item in forward] == [
+        item.to_dict() for item in reversed_order
+    ]
+    assert len(forward) == 1
+    candidate = forward[0]
+    assert candidate.owner_source_id == "AI-UNIQUE"
+    assert candidate.relation.relation_type == "exact-diff-hash"
+    assert candidate.relation.target_source_id == "DIFF-UNIQUE"
+    assert candidate.relation.evidence_locator == "payload.patch_sha256"
+
+
 def test_direct_execution_reference_rejects_missing_target():
     with pytest.raises(ValueError, match="direct execution/source reference.*MISSING"):
         derive_explicit_relations(

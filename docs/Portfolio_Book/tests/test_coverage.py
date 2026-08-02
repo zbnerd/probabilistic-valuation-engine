@@ -305,6 +305,84 @@ def _claim(claim_id: str, document_source_id: str) -> DocumentClaim:
     )
 
 
+class _BoundedIterations:
+    def __init__(self, values: tuple[object, ...], maximum: int, label: str):
+        self._values = values
+        self._maximum = maximum
+        self._label = label
+        self.iterations = 0
+
+    def __iter__(self):
+        self.iterations += 1
+        if self.iterations > self._maximum:
+            raise AssertionError(
+                f"{self._label} iterated {self.iterations} times; "
+                f"maximum is {self._maximum}"
+            )
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
+class _NoLinearMembership(tuple):
+    def __contains__(self, value: object) -> bool:
+        raise AssertionError(f"linear tuple membership used for {value}")
+
+
+class _AccessBudget:
+    def __init__(self, maximum: int, label: str):
+        self._maximum = maximum
+        self._label = label
+        self.count = 0
+
+    def record(self) -> None:
+        self.count += 1
+        if self.count > self._maximum:
+            raise AssertionError(
+                f"{self._label} accessed {self.count} times; "
+                f"maximum is {self._maximum}"
+            )
+
+
+class _ClaimParentProbe:
+    def __init__(
+        self,
+        claim: DocumentClaim,
+        budget: _AccessBudget,
+        serialization_order: list[str],
+    ):
+        self._claim = claim
+        self._budget = budget
+        self._serialization_order = serialization_order
+
+    @property
+    def document_source_id(self) -> str:
+        self._budget.record()
+        return self._claim.document_source_id
+
+    def to_dict(self) -> dict[str, object]:
+        self._serialization_order.append(self._claim.claim_id)
+        return self._claim.to_dict()
+
+    def __getattr__(self, name: str):
+        return getattr(self._claim, name)
+
+
+class _SourceIdProbe:
+    def __init__(self, source: SourceRecord, budget: _AccessBudget):
+        self._source = source
+        self._budget = budget
+
+    @property
+    def source_id(self) -> str:
+        self._budget.record()
+        return self._source.source_id
+
+    def __getattr__(self, name: str):
+        return getattr(self._source, name)
+
+
 def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
     external_path = tmp_path / "private/resume.pdf"
     external_path.parent.mkdir()
@@ -362,6 +440,212 @@ def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
         ),
         external_path,
     )
+
+
+def _archived_document_representation(
+    source_id: str, claims: tuple[DocumentClaim, ...]
+) -> bytes:
+    return json.dumps(
+        {
+            "source": {"source_id": source_id},
+            "claims": [claim.to_dict() for claim in claims],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def test_document_verifiers_index_interleaved_claims_once_and_preserve_parent_order(
+    tmp_path: Path,
+):
+    snapshot, _ = _snapshot(tmp_path)
+    snapshot = replace(
+        snapshot,
+        tracked_files=(
+            TrackedFileSnapshot(
+                "docs/a.md", "100644", "blob", "a" * 40, "document"
+            ),
+            TrackedFileSnapshot(
+                "docs/b.md", "100644", "blob", "b" * 40, "document"
+            ),
+        ),
+    )
+    sources = (
+        _source(
+            "DOC-A",
+            "tracked-document",
+            locator="git:docs/a.md",
+            payload={"unit_count": 2},
+        ),
+        _source(
+            "DOC-B",
+            "tracked-document",
+            locator="git:docs/b.md",
+            payload={"unit_count": 2},
+        ),
+    )
+    claims = (
+        _claim("DOC-A-1", "DOC-A"),
+        _claim("DOC-B-1", "DOC-B"),
+        _claim("DOC-A-2", "DOC-A"),
+        _claim("DOC-B-2", "DOC-B"),
+    )
+    claim_iterations = _BoundedIterations(claims, 1, "document claims")
+
+    expected, captured = coverage_module._verify_documents(
+        snapshot,
+        sources,
+        claim_iterations,  # type: ignore[arg-type]
+    )
+
+    assert expected == captured == ("DOC:docs/a.md", "DOC:docs/b.md")
+    assert claim_iterations.iterations == 1
+
+    serialization_order: list[str] = []
+    parent_budget = _AccessBudget(len(claims), "claim document_source_id")
+    probed_claims = tuple(
+        _ClaimParentProbe(claim, parent_budget, serialization_order)
+        for claim in claims
+    )
+    coverage_module.verify_document_claim_archive_binding(
+        sources,
+        probed_claims,  # type: ignore[arg-type]
+        {
+            "DOC-A": _archived_document_representation(
+                "DOC-A", (claims[0], claims[2])
+            ),
+            "DOC-B": _archived_document_representation(
+                "DOC-B", (claims[1], claims[3])
+            ),
+        },
+    )
+
+    assert parent_budget.count == len(claims)
+    assert serialization_order == ["DOC-A-1", "DOC-A-2", "DOC-B-1", "DOC-B-2"]
+
+
+def test_document_indexes_retain_count_and_archived_claim_union_failures(
+    tmp_path: Path,
+):
+    snapshot, _ = _snapshot(tmp_path)
+    source = _source(
+        "DOC-A",
+        "tracked-document",
+        locator="git:docs/a.md",
+        payload={"unit_count": 1},
+    )
+    first = _claim("DOC-A-1", "DOC-A")
+    second = _claim("DOC-A-2", "DOC-A")
+
+    with pytest.raises(CoverageError, match="document claim count mismatch: DOC-A"):
+        coverage_module._verify_documents(
+            snapshot,
+            (replace(source, payload={"unit_count": 2}),),
+            (first,),
+        )
+
+    duplicate_archive = json.dumps(
+        {
+            "source": {"source_id": "DOC-A"},
+            "claims": [first.to_dict(), first.to_dict()],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    with pytest.raises(CoverageError, match="archived document claim IDs are invalid"):
+        coverage_module.verify_document_claim_archive_binding(
+            (source,), (first,), {"DOC-A": duplicate_archive}
+        )
+
+    with pytest.raises(
+        CoverageError,
+        match="archived document claim union missing stable ID: DOC-A-2",
+    ):
+        coverage_module.verify_document_claim_archive_binding(
+            (source,),
+            (first,),
+            {
+                "DOC-A": _archived_document_representation(
+                    "DOC-A", (first, second)
+                )
+            },
+        )
+
+    with pytest.raises(
+        CoverageError,
+        match="archived document claim union has unexpected stable ID: DOC-A-2",
+    ):
+        coverage_module.verify_document_claim_archive_binding(
+            (source,),
+            (first, second),
+            {"DOC-A": _archived_document_representation("DOC-A", (first,))},
+        )
+
+    with pytest.raises(CoverageError, match="document claims: duplicate stable ID"):
+        coverage_module._verify_documents(
+            snapshot,
+            (source,),
+            (first, replace(first, document_source_id="DOC-A")),
+        )
+
+
+def test_ai_verifier_groups_entries_by_exact_source_path_in_one_pass(tmp_path: Path):
+    snapshot, _ = _snapshot(tmp_path)
+    path_a = "docs/ai-traces/run/a.jsonl"
+    path_b = "docs/ai-traces/run/b.jsonl"
+    snapshot = replace(
+        snapshot,
+        ai_trace_files=(
+            FileSnapshot(path_a, 2, _hash(b"a")),
+            FileSnapshot(path_b, 2, _hash(b"b")),
+        ),
+    )
+    container_a = _source(
+        "AI-FILE-A",
+        "ai-trace-file",
+        payload={"source_path": path_a, "entry_count": 1},
+        raw_hash=_hash(b"a"),
+    )
+    container_b = _source(
+        "AI-FILE-B",
+        "ai-trace-file",
+        payload={"source_path": path_b, "entry_count": 1},
+        raw_hash=_hash(b"b"),
+    )
+    entry_a = _source(
+        "AI-ENTRY-A", "ai-trace-entry", payload={"source_path": path_a}
+    )
+    entry_b = _source(
+        "AI-ENTRY-B", "ai-trace-entry", payload={"source_path": path_b}
+    )
+    interleaved = (entry_b, container_a, entry_a, container_b)
+    source_iterations = _BoundedIterations(interleaved, 1, "AI sources")
+
+    expected, captured = coverage_module._verify_ai(
+        snapshot,
+        source_iterations,  # type: ignore[arg-type]
+    )
+
+    assert expected == captured == (f"AI:{path_a}", f"AI:{path_b}")
+    assert source_iterations.iterations == 1
+
+    near_match = _source(
+        "AI-ENTRY-NEAR",
+        "ai-trace-entry",
+        payload={"source_path": path_a + " "},
+    )
+    with pytest.raises(CoverageError, match=f"AI trace child missing stable ID: {path_a}"):
+        coverage_module._verify_ai(
+            snapshot,
+            (
+                replace(container_a, payload={**container_a.payload, "entry_count": 2}),
+                container_b,
+                entry_a,
+                entry_b,
+                near_match,
+            ),
+        )
 
 
 def test_collect_write_verify_accepts_source_relation_to_document_claim(
@@ -1276,6 +1560,120 @@ def test_archive_verification_rejects_missing_reordered_corrupt_and_external_ori
         verify_archive_members((replace(source, stored_members=(broken, members[1])),), (tmp_path / filename,))
 
 
+def _write_reassembly_manifest_archive(
+    path: Path, entries: tuple[dict[str, object], ...]
+) -> None:
+    payload = json.dumps(
+        {"entries": list(entries)},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    with tarfile.open(path, "w:gz") as archive:
+        info = tarfile.TarInfo("reassembly-manifest.json")
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+
+
+def test_archive_manifest_resolves_exact_source_ids_with_bounded_access(
+    tmp_path: Path,
+):
+    empty_hash = _hash(b"")
+    sources = tuple(
+        _source(
+            f"ARCHIVE-SOURCE-{index:02d}",
+            "fixture",
+            stored_hash=empty_hash,
+            members=(),
+        )
+        for index in range(12)
+    )
+    archive = tmp_path / "manifest-only.tar.gz"
+    entries = tuple(
+        {
+            "source_id": source.source_id,
+            "whole_sha256": empty_hash,
+            "whole_byte_count": 0,
+            "parts": [],
+        }
+        for source in sources
+    )
+    _write_reassembly_manifest_archive(archive, entries)
+    budget = _AccessBudget(len(sources) * 3, "archive source_id")
+    probed_sources = tuple(_SourceIdProbe(source, budget) for source in sources)
+
+    assert verify_archive_members(
+        probed_sources,  # type: ignore[arg-type]
+        (archive,),
+    ) == {}
+    assert budget.count <= len(sources) * 3
+
+
+def test_archive_manifest_index_preserves_missing_duplicate_and_identity_failures(
+    tmp_path: Path,
+):
+    empty_hash = _hash(b"")
+    source = _source("ARCHIVE-SOURCE", "fixture", stored_hash=empty_hash, members=())
+    archive = tmp_path / "manifest-only.tar.gz"
+
+    _write_reassembly_manifest_archive(
+        archive,
+        (
+            {
+                "source_id": "MISSING",
+                "whole_sha256": empty_hash,
+                "whole_byte_count": 0,
+                "parts": [],
+            },
+        ),
+    )
+    with pytest.raises(
+        CoverageError,
+        match="reassembly manifest source missing stable ID: manifest-only.tar.gz\\|MISSING",
+    ):
+        verify_archive_members((source,), (archive,))
+
+    _write_reassembly_manifest_archive(
+        archive,
+        (
+            {
+                "source_id": source.source_id,
+                "whole_sha256": "0" * 64,
+                "whole_byte_count": 0,
+                "parts": [],
+            },
+        ),
+    )
+    with pytest.raises(
+        CoverageError,
+        match="reassembly manifest whole identity mismatch: ARCHIVE-SOURCE",
+    ):
+        verify_archive_members((source,), (archive,))
+
+    value = b"safe"
+    data_archive = tmp_path / "duplicate-member.tar.gz"
+    locator = f"{data_archive.name}#records/shared.part"
+    with tarfile.open(data_archive, "w:gz") as stream:
+        info = tarfile.TarInfo("records/shared.part")
+        info.size = len(value)
+        stream.addfile(info, io.BytesIO(value))
+    members = (
+        StoredArtifactMember("part-1", locator, 1, 2, len(value), _hash(value)),
+        StoredArtifactMember("part-2", locator, 2, 2, len(value), _hash(value)),
+    )
+    with pytest.raises(CoverageError, match="duplicate declared member locator"):
+        verify_archive_members(
+            (
+                _source(
+                    "DUPLICATE",
+                    "fixture",
+                    stored_hash=_hash(value + value),
+                    members=members,
+                ),
+            ),
+            (data_archive,),
+        )
+
+
 def test_document_claims_are_bound_byte_for_byte_to_archived_safe_representation(
     tmp_path: Path,
 ):
@@ -1389,6 +1787,81 @@ def test_confirmed_unavailable_fingerprint_validates_metadata_record_contract():
     bad_hash = replace(safe.record, raw_hash="0" * 64)
     with pytest.raises(CoverageError, match="availability body hash mismatch"):
         coverage_module._fingerprint_child(fingerprint, (bad_hash,))
+
+
+def test_github_verifier_indexes_sources_fingerprints_and_child_membership_once(
+    tmp_path: Path,
+):
+    snapshot, _ = _snapshot(tmp_path)
+    fingerprint = snapshot.github_window.endpoint_fingerprints[0]
+    fingerprint = replace(
+        fingerprint,
+        page_response_hashes=_NoLinearMembership(
+            fingerprint.page_response_hashes
+        ),
+        stable_child_ids=_NoLinearMembership(fingerprint.stable_child_ids),
+    )
+    snapshot = replace(
+        snapshot,
+        github_window=replace(
+            snapshot.github_window,
+            endpoint_fingerprints=_BoundedIterations(
+                (fingerprint,), 1, "GitHub endpoint fingerprints"
+            ),  # type: ignore[arg-type]
+        ),
+    )
+    child = _source(
+        "GH-CHILD",
+        "github-pr-commit",
+        locator=(
+            f"github:{fingerprint.endpoint_key}#"
+            f"{fingerprint.stable_child_ids[0]}"
+        ),
+        raw_hash=fingerprint.page_response_hashes[0],
+    )
+    sources = _BoundedIterations(
+        (_source("GH-PR-7", "github-pull-request"), child),
+        1,
+        "GitHub sources",
+    )
+
+    expected, captured, detail = coverage_module._verify_github(
+        snapshot,
+        sources,  # type: ignore[arg-type]
+        strict_endpoints=False,
+    )
+
+    assert expected == captured == ("GH-PR-7",)
+    assert f"pull:7|{fingerprint.stable_child_ids[0]}" in detail
+    assert sources.iterations == 1
+    assert snapshot.github_window.endpoint_fingerprints.iterations == 1  # type: ignore[union-attr]
+
+    plain_fingerprint = replace(
+        fingerprint,
+        page_response_hashes=tuple(fingerprint.page_response_hashes),
+        stable_child_ids=tuple(fingerprint.stable_child_ids),
+    )
+    plain_snapshot = replace(
+        snapshot,
+        github_window=replace(
+            snapshot.github_window,
+            endpoint_fingerprints=(plain_fingerprint,),
+        ),
+    )
+    assert coverage_module._fingerprint_child(plain_fingerprint, (child,)) == (
+        f"pull:7|{plain_fingerprint.stable_child_ids[0]}",
+    )
+    unexpected_child = replace(
+        child,
+        source_id="GH-UNEXPECTED-CHILD",
+        source_locator=f"github:{fingerprint.endpoint_key}#unexpected-child",
+    )
+    with pytest.raises(CoverageError, match="GitHub child fingerprint missing stable ID"):
+        coverage_module._verify_github(
+            plain_snapshot,
+            (_source("GH-PR-7", "github-pull-request"), child, unexpected_child),
+            strict_endpoints=False,
+        )
 
 
 def test_patch_406_coverage_is_terminal_but_json_406_is_rejected():
@@ -1553,13 +2026,20 @@ def test_count_gap_coverage_binds_parent_count_detail_fingerprint_and_identity(t
     )
     sources = (parent, gap.record)
 
+    source_probe = _BoundedIterations(sources, 1, "count-gap sources")
+    fingerprint_probe = _BoundedIterations(
+        fingerprints, 1, "count-gap endpoint fingerprints"
+    )
+
     assert coverage_module._fingerprint_child(
         fingerprint,
-        sources,
-        endpoint_fingerprints=fingerprints,
+        source_probe,  # type: ignore[arg-type]
+        endpoint_fingerprints=fingerprint_probe,  # type: ignore[arg-type]
     ) == (
         f"pull:7|{token}",
     )
+    assert source_probe.iterations == 1
+    assert fingerprint_probe.iterations == 1
     snapshot, _ = _snapshot(tmp_path)
     window = replace(
         snapshot.github_window,
@@ -1756,15 +2236,36 @@ def test_terminal_unavailable_detail_and_enumeration_metadata_count_complete(
         (7,),
         (),
         {"pull:7": "2026-08-01T00:00:00Z"},
-        fingerprints,
+        _BoundedIterations(
+            fingerprints, 1, "terminal endpoint fingerprints"
+        ),  # type: ignore[arg-type]
+    )
+    source_probe = _BoundedIterations(
+        (availability,), 1, "terminal GitHub sources"
     )
     expected, captured, detail = coverage_module._verify_github(
         replace(snapshot, github_window=window),
-        (availability,),
+        source_probe,  # type: ignore[arg-type]
         strict_endpoints=True,
     )
     assert expected == captured == ("GH-PR-7",)
     assert "pull:enumeration|pull:7" in detail
+    assert source_probe.iterations == 1
+    assert window.endpoint_fingerprints.iterations == 1  # type: ignore[union-attr]
+
+    incomplete_window = replace(
+        window,
+        endpoint_fingerprints=(fingerprints[0], fingerprints[2]),
+    )
+    with pytest.raises(
+        CoverageError,
+        match=r"GitHub endpoint fingerprint missing stable ID: issue:enumeration\|\*/issues",
+    ):
+        coverage_module._verify_github(
+            replace(snapshot, github_window=incomplete_window),
+            (availability,),
+            strict_endpoints=True,
+        )
 
 
 def test_external_original_is_rejected_by_full_member_name_basename_and_identity(tmp_path: Path):

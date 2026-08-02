@@ -184,6 +184,34 @@ class CaptureArtifacts:
     archive_paths: tuple[Path, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _DocumentClaimIndex:
+    claim_ids: tuple[str, ...]
+    document_source_ids: tuple[str, ...]
+    by_document_source_id: dict[str, tuple[DocumentClaim, ...]]
+
+
+def _index_document_claims(
+    claims: Iterable[DocumentClaim],
+) -> _DocumentClaimIndex:
+    frozen_claims = tuple(claims)
+    claim_ids: list[str] = []
+    document_source_ids: list[str] = []
+    grouped: dict[str, list[DocumentClaim]] = {}
+    for claim in frozen_claims:
+        claim_ids.append(claim.claim_id)
+        document_source_id = claim.document_source_id
+        document_source_ids.append(document_source_id)
+        grouped.setdefault(document_source_id, []).append(claim)
+    return _DocumentClaimIndex(
+        claim_ids=tuple(claim_ids),
+        document_source_ids=tuple(document_source_ids),
+        by_document_source_id={
+            source_id: tuple(values) for source_id, values in grouped.items()
+        },
+    )
+
+
 class _SystemClock:
     def now(self) -> datetime:
         return datetime.now(UTC)
@@ -391,6 +419,9 @@ def verify_archive_members(
 ) -> dict[str, bytes]:
     """Verify exact stored-member union, order, hashes, and reassembly."""
     frozen_sources = tuple(sources)
+    source_by_id: dict[str, SourceRecord] = {}
+    for source in frozen_sources:
+        source_by_id.setdefault(source.source_id, source)
     paths = tuple(Path(path) for path in archive_paths)
     by_name: dict[str, Path] = {}
     actual: dict[str, bytes] = {}
@@ -459,10 +490,7 @@ def verify_archive_members(
                 raise CoverageError(f"invalid reassembly manifest entry: {filename}")
             rows.extend(part for part in entry["parts"] if isinstance(part, dict))
             source_id = entry.get("source_id")
-            source = next(
-                (value for value in frozen_sources if value.source_id == source_id),
-                None,
-            )
+            source = source_by_id.get(source_id) if isinstance(source_id, str) else None
             if source is None:
                 raise CoverageError(
                     f"reassembly manifest source missing stable ID: {filename}|{source_id}"
@@ -494,9 +522,11 @@ def verify_document_claim_archive_binding(
     sources: Iterable[SourceRecord],
     claims: Iterable[DocumentClaim],
     reconstructed: Mapping[str, bytes],
+    *,
+    claim_index: _DocumentClaimIndex | None = None,
 ) -> None:
     """Bind every document claim to its exact archived safe representation."""
-    frozen_claims = tuple(claims)
+    indexed_claims = claim_index or _index_document_claims(claims)
     for source in sources:
         if source.source_type not in {
             "tracked-document",
@@ -539,10 +569,9 @@ def verify_document_claim_archive_binding(
             raise CoverageError(
                 f"archived document claim IDs are invalid: {source.source_id}"
             )
-        captured = tuple(
-            claim
-            for claim in frozen_claims
-            if claim.document_source_id == source.source_id
+        captured = indexed_claims.by_document_source_id.get(
+            source.source_id,
+            (),
         )
         captured_by_id = {claim.claim_id: claim.to_dict() for claim in captured}
         if len(captured_by_id) != len(captured):
@@ -570,8 +599,11 @@ def _verify_external_inputs(
     repo: Path,
     snapshot: SnapshotManifest,
     sources: tuple[SourceRecord, ...],
-    claims: tuple[DocumentClaim, ...],
+    claims: Iterable[DocumentClaim],
+    *,
+    claim_index: _DocumentClaimIndex | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    indexed_claims = claim_index or _index_document_claims(claims)
     by_locator = {source.source_locator: source for source in sources}
     expected: list[str] = []
     captured: list[str] = []
@@ -597,8 +629,9 @@ def _verify_external_inputs(
             or payload.get("original_pdf_archived") is not False
         ):
             raise CoverageError(f"external source identity mismatch: {item.path}")
-        descendants = tuple(
-            claim for claim in claims if claim.document_source_id == source.source_id
+        descendants = indexed_claims.by_document_source_id.get(
+            source.source_id,
+            (),
         )
         unit_count = payload.get("unit_count")
         if unit_count != len(descendants):
@@ -644,8 +677,11 @@ def _verify_external_inputs(
 def _verify_documents(
     snapshot: SnapshotManifest,
     sources: tuple[SourceRecord, ...],
-    claims: tuple[DocumentClaim, ...],
+    claims: Iterable[DocumentClaim],
+    *,
+    claim_index: _DocumentClaimIndex | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    indexed_claims = claim_index or _index_document_claims(claims)
     expected = tuple(
         f"DOC:{item.path}"
         for item in snapshot.tracked_files
@@ -658,32 +694,38 @@ def _verify_documents(
         if item.collection_rule_id == "document" and f"git:{item.path}" in locators
     )
     _stable_set("documents", expected, captured)
-    claim_ids = [claim.claim_id for claim in claims]
+    claim_ids = indexed_claims.claim_ids
     if len(claim_ids) != len(set(claim_ids)):
         raise CoverageError("document claims: duplicate stable ID")
     source_ids = {source.source_id for source in sources}
-    for claim in claims:
-        if claim.document_source_id not in source_ids:
+    for document_source_id in indexed_claims.document_source_ids:
+        if document_source_id not in source_ids:
             raise CoverageError(
-                f"document claim parent missing stable ID: {claim.document_source_id}"
+                f"document claim parent missing stable ID: {document_source_id}"
             )
     for source in sources:
         if source.source_locator.startswith(("git:", "external:")) and "unit_count" in source.payload:
-            actual = sum(claim.document_source_id == source.source_id for claim in claims)
+            actual = len(
+                indexed_claims.by_document_source_id.get(source.source_id, ())
+            )
             if source.payload["unit_count"] != actual:
                 raise CoverageError(f"document claim count mismatch: {source.source_id}")
     return expected, captured
 
 
 def _verify_ai(
-    snapshot: SnapshotManifest, sources: tuple[SourceRecord, ...]
+    snapshot: SnapshotManifest, sources: Iterable[SourceRecord]
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     expected = tuple(f"AI:{item.path}" for item in snapshot.ai_trace_files)
-    containers = {
-        str(source.payload.get("source_path")): source
-        for source in sources
-        if source.source_type == "ai-trace-file"
-    }
+    containers: dict[str, SourceRecord] = {}
+    children_by_source_path: dict[str, list[SourceRecord]] = {}
+    for source in sources:
+        if source.source_type == "ai-trace-file":
+            containers[str(source.payload.get("source_path"))] = source
+            continue
+        source_path = source.payload.get("source_path")
+        if source.source_type == "ai-trace-entry" and isinstance(source_path, str):
+            children_by_source_path.setdefault(source_path, []).append(source)
     captured = tuple(f"AI:{path}" for path in containers)
     _stable_set("AI traces", expected, captured)
     snapshots = {item.path: item for item in snapshot.ai_trace_files}
@@ -691,12 +733,7 @@ def _verify_ai(
         frozen = snapshots[path]
         if container.raw_hash != frozen.sha256:
             raise CoverageError(f"AI trace hash mismatch: {path}")
-        children = tuple(
-            source
-            for source in sources
-            if source.source_type == "ai-trace-entry"
-            and source.payload.get("source_path") == path
-        )
+        children = children_by_source_path.get(path, ())
         if container.payload.get("entry_count") != len(children):
             raise CoverageError(f"AI trace child missing stable ID: {path}")
     return expected, captured
@@ -775,12 +812,105 @@ def _verify_git(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _GitHubVerificationIndex:
+    sources: tuple[SourceRecord, ...]
+    endpoint_fingerprints: tuple[GitHubEndpointFingerprint, ...]
+    sources_by_locator: dict[str, tuple[SourceRecord, ...]]
+    sources_by_type_locator: dict[tuple[str, str], tuple[SourceRecord, ...]]
+    sources_by_id: dict[str, tuple[SourceRecord, ...]]
+    fingerprints_by_item_endpoint: dict[
+        tuple[str, str], tuple[GitHubEndpointFingerprint, ...]
+    ]
+    fingerprints_by_endpoint: dict[
+        str, tuple[GitHubEndpointFingerprint, ...]
+    ]
+    fingerprints_by_item_suffix: dict[
+        tuple[str, str], tuple[GitHubEndpointFingerprint, ...]
+    ]
+    page_response_hashes_by_fingerprint_id: dict[int, frozenset[str]]
+    stable_child_ids_by_fingerprint_id: dict[int, frozenset[str]]
+
+
+def _index_github_verification(
+    sources: Iterable[SourceRecord],
+    endpoint_fingerprints: Iterable[GitHubEndpointFingerprint],
+) -> _GitHubVerificationIndex:
+    frozen_sources = tuple(sources)
+    frozen_fingerprints = tuple(endpoint_fingerprints)
+    sources_by_locator: dict[str, list[SourceRecord]] = {}
+    sources_by_type_locator: dict[tuple[str, str], list[SourceRecord]] = {}
+    sources_by_id: dict[str, list[SourceRecord]] = {}
+    for source in frozen_sources:
+        sources_by_locator.setdefault(source.source_locator, []).append(source)
+        sources_by_type_locator.setdefault(
+            (source.source_type, source.source_locator), []
+        ).append(source)
+        sources_by_id.setdefault(source.source_id, []).append(source)
+
+    fingerprints_by_item_endpoint: dict[
+        tuple[str, str], list[GitHubEndpointFingerprint]
+    ] = {}
+    fingerprints_by_endpoint: dict[str, list[GitHubEndpointFingerprint]] = {}
+    fingerprints_by_item_suffix: dict[
+        tuple[str, str], list[GitHubEndpointFingerprint]
+    ] = {}
+    stable_child_ids_by_fingerprint_id: dict[int, frozenset[str]] = {}
+    page_response_hashes_by_fingerprint_id: dict[int, frozenset[str]] = {}
+    for fingerprint in frozen_fingerprints:
+        key = (fingerprint.item_key, fingerprint.endpoint_key)
+        fingerprints_by_item_endpoint.setdefault(key, []).append(fingerprint)
+        fingerprints_by_endpoint.setdefault(fingerprint.endpoint_key, []).append(
+            fingerprint
+        )
+        stable_child_ids_by_fingerprint_id[id(fingerprint)] = frozenset(
+            fingerprint.stable_child_ids
+        )
+        page_response_hashes_by_fingerprint_id[id(fingerprint)] = frozenset(
+            fingerprint.page_response_hashes
+        )
+        for offset, value in enumerate(fingerprint.endpoint_key):
+            if value == "/":
+                suffix = fingerprint.endpoint_key[offset:]
+                fingerprints_by_item_suffix.setdefault(
+                    (fingerprint.item_key, suffix), []
+                ).append(fingerprint)
+
+    return _GitHubVerificationIndex(
+        sources=frozen_sources,
+        endpoint_fingerprints=frozen_fingerprints,
+        sources_by_locator={
+            key: tuple(values) for key, values in sources_by_locator.items()
+        },
+        sources_by_type_locator={
+            key: tuple(values) for key, values in sources_by_type_locator.items()
+        },
+        sources_by_id={
+            key: tuple(values) for key, values in sources_by_id.items()
+        },
+        fingerprints_by_item_endpoint={
+            key: tuple(values)
+            for key, values in fingerprints_by_item_endpoint.items()
+        },
+        fingerprints_by_endpoint={
+            key: tuple(values) for key, values in fingerprints_by_endpoint.items()
+        },
+        fingerprints_by_item_suffix={
+            key: tuple(values)
+            for key, values in fingerprints_by_item_suffix.items()
+        },
+        page_response_hashes_by_fingerprint_id=page_response_hashes_by_fingerprint_id,
+        stable_child_ids_by_fingerprint_id=stable_child_ids_by_fingerprint_id,
+    )
+
+
 def _fingerprint_child(
     fingerprint: GitHubEndpointFingerprint,
-    sources: tuple[SourceRecord, ...],
+    sources: Iterable[SourceRecord],
     metadata_tokens: tuple[str, ...] | None = None,
     *,
-    endpoint_fingerprints: tuple[GitHubEndpointFingerprint, ...] = (),
+    endpoint_fingerprints: Iterable[GitHubEndpointFingerprint] = (),
+    verification_index: _GitHubVerificationIndex | None = None,
 ) -> tuple[str, ...]:
     if fingerprint.availability_status == "transient-failure":
         raise CoverageError(
@@ -808,6 +938,9 @@ def _fingerprint_child(
         return tuple(
             f"{fingerprint.item_key}|{token}" for token in metadata_tokens
         )
+    indexed = verification_index or _index_github_verification(
+        sources, endpoint_fingerprints
+    )
     if fingerprint.availability_status == "confirmed-unavailable":
         if pages != (1,) or len(fingerprint.stable_child_ids) != 1:
             raise CoverageError(
@@ -827,12 +960,9 @@ def _fingerprint_child(
                 f"GitHub 406 availability is not a patch variant: {fingerprint.item_key}|{fingerprint.endpoint_key}"
             )
         locator = f"github:{fingerprint.endpoint_key}"
-        matches = [
-            source
-            for source in sources
-            if source.source_type == "github-availability"
-            and source.source_locator == locator
-        ]
+        matches = indexed.sources_by_type_locator.get(
+            ("github-availability", locator), ()
+        )
         if len(matches) != 1:
             raise CoverageError(
                 f"GitHub availability record missing stable ID: {fingerprint.item_key}|{token}"
@@ -886,21 +1016,27 @@ def _fingerprint_child(
     if gap_tokens:
         gap_captured = _verify_count_gap(
             fingerprint,
-            sources,
+            indexed.sources,
             gap_tokens[0],
-            endpoint_fingerprints,
+            indexed.endpoint_fingerprints,
+            verification_index=indexed,
         )
     captured: list[str] = []
     for stable_id in fingerprint.stable_child_ids:
         if stable_id.startswith("count-gap:"):
             continue
         expected_locator = f"github:{fingerprint.endpoint_key}#{stable_id}"
-        matches = [source for source in sources if source.source_locator == expected_locator]
+        matches = indexed.sources_by_locator.get(expected_locator, ())
         if len(matches) != 1:
             raise CoverageError(
                 f"GitHub child missing stable ID: {fingerprint.item_key}|{stable_id}"
             )
-        if matches[0].raw_hash not in fingerprint.page_response_hashes:
+        page_hashes = indexed.page_response_hashes_by_fingerprint_id.get(
+            id(fingerprint)
+        )
+        if page_hashes is None:
+            page_hashes = frozenset(fingerprint.page_response_hashes)
+        if matches[0].raw_hash not in page_hashes:
             raise CoverageError(
                 f"GitHub child hash reconciliation mismatch: {matches[0].source_id}"
             )
@@ -910,17 +1046,19 @@ def _fingerprint_child(
 
 def _verify_count_gap(
     fingerprint: GitHubEndpointFingerprint,
-    sources: tuple[SourceRecord, ...],
+    sources: Iterable[SourceRecord],
     token: str,
-    endpoint_fingerprints: tuple[GitHubEndpointFingerprint, ...],
+    endpoint_fingerprints: Iterable[GitHubEndpointFingerprint],
+    *,
+    verification_index: _GitHubVerificationIndex | None = None,
 ) -> tuple[str, ...]:
+    indexed = verification_index or _index_github_verification(
+        sources, endpoint_fingerprints
+    )
     locator = f"github:{fingerprint.endpoint_key}#{token}"
-    matches = [
-        source
-        for source in sources
-        if source.source_type == "github-count-gap"
-        and source.source_locator == locator
-    ]
+    matches = indexed.sources_by_type_locator.get(
+        ("github-count-gap", locator), ()
+    )
     if len(matches) != 1:
         raise CoverageError(
             f"GitHub count gap record missing stable ID: {fingerprint.item_key}|{token}"
@@ -1022,7 +1160,7 @@ def _verify_count_gap(
     if count_field is None or not separator or item_kind not in {"pull", "pr", "issue"} or not raw_number.isdigit():
         raise CoverageError(f"GitHub count gap parent locator mismatch: {record.source_id}")
     prefix = "GH-PR" if item_kind in {"pull", "pr"} else "GH-ISSUE"
-    parent_matches = [source for source in sources if source.source_id == f"{prefix}-{raw_number}"]
+    parent_matches = indexed.sources_by_id.get(f"{prefix}-{raw_number}", ())
     if len(parent_matches) != 1:
         raise CoverageError(f"GitHub count gap parent missing stable ID: {record.source_id}")
     parent = parent_matches[0]
@@ -1048,12 +1186,9 @@ def _verify_count_gap(
     repository_base = "/".join(endpoint_parts[:4])
     detail_kind = "pulls" if item_kind in {"pull", "pr"} else "issues"
     detail_endpoint = f"{repository_base}/{detail_kind}/{raw_number}"
-    detail_matches = [
-        candidate
-        for candidate in endpoint_fingerprints
-        if candidate.item_key == fingerprint.item_key
-        and candidate.endpoint_key == detail_endpoint
-    ]
+    detail_matches = indexed.fingerprints_by_item_endpoint.get(
+        (fingerprint.item_key, detail_endpoint), ()
+    )
     empty_params_hash = _sha256(_canonical_json({}))
     if len(detail_matches) != 1:
         raise CoverageError(f"GitHub count gap detail fingerprint mismatch: {record.source_id}")
@@ -1117,20 +1252,21 @@ def _verify_count_gap(
 
 def _verify_github(
     snapshot: SnapshotManifest,
-    sources: tuple[SourceRecord, ...],
+    sources: Iterable[SourceRecord],
     *,
     strict_endpoints: bool,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     window = snapshot.github_window
     if window is None:
         raise CoverageError("GitHub reconciliation window is absent")
+    indexed = _index_github_verification(sources, window.endpoint_fingerprints)
     expected_parents = tuple(
         [f"GH-PR-{number}" for number in window.pull_request_numbers]
         + [f"GH-ISSUE-{number}" for number in window.issue_numbers]
     )
     captured_parent_ids = [
         source.source_id
-        for source in sources
+        for source in indexed.sources
         if source.source_type in {"github-pull-request", "github-issue"}
     ]
     terminal_detail_items: set[str] = set()
@@ -1146,10 +1282,10 @@ def _verify_github(
     ):
         terminal = [
             fingerprint
-            for fingerprint in window.endpoint_fingerprints
-            if fingerprint.item_key == item_key
-            and fingerprint.endpoint_key.endswith(suffix)
-            and fingerprint.availability_status == "confirmed-unavailable"
+            for fingerprint in indexed.fingerprints_by_item_suffix.get(
+                (item_key, suffix), ()
+            )
+            if fingerprint.availability_status == "confirmed-unavailable"
         ]
         if len(terminal) == 1:
             terminal_detail_items.add(item_key)
@@ -1165,7 +1301,7 @@ def _verify_github(
     fingerprint_keys: list[str] = []
     children: list[str] = []
     seen: set[tuple[str, str]] = set()
-    for fingerprint in window.endpoint_fingerprints:
+    for fingerprint in indexed.endpoint_fingerprints:
         key = (fingerprint.item_key, fingerprint.endpoint_key)
         if key in seen:
             raise CoverageError(f"GitHub duplicate endpoint fingerprint: {key[0]}|{key[1]}")
@@ -1183,9 +1319,10 @@ def _verify_github(
         children.extend(
             _fingerprint_child(
                 fingerprint,
-                sources,
+                indexed.sources,
                 metadata_tokens,
-                endpoint_fingerprints=window.endpoint_fingerprints,
+                endpoint_fingerprints=indexed.endpoint_fingerprints,
+                verification_index=indexed,
             )
         )
     if strict_endpoints:
@@ -1226,16 +1363,17 @@ def _verify_github(
                 )
         for item_key, suffix in expected_endpoint_suffixes:
             matches = [
-                endpoint
-                for candidate_item, endpoint in seen
-                if candidate_item == item_key and endpoint.endswith(suffix)
+                fingerprint.endpoint_key
+                for fingerprint in indexed.fingerprints_by_item_suffix.get(
+                    (item_key, suffix), ()
+                )
             ]
             if len(matches) != 1:
                 raise CoverageError(
                     f"GitHub endpoint fingerprint missing stable ID: {item_key}|*{suffix}"
                 )
     # Every archived GitHub endpoint record must still have its endpoint proof.
-    for source in sources:
+    for source in indexed.sources:
         if not source.source_locator.startswith("github:/"):
             continue
         locator = source.source_locator.removeprefix("github:").split("#", 1)[0]
@@ -1250,22 +1388,25 @@ def _verify_github(
             "github-requested-reviewer",
             "github-count-gap",
         }
-        matching = [
-            fingerprint
-            for fingerprint in window.endpoint_fingerprints
-            if fingerprint.endpoint_key == locator
-        ]
+        matching = indexed.fingerprints_by_endpoint.get(locator, ())
         if source.source_type in child_types | {"github-patch", "github-availability"} and not matching:
             raise CoverageError(f"GitHub endpoint fingerprint missing stable ID: {locator}")
         if source.source_type in child_types:
             stable_id = source.source_locator.split("#", 1)[1] if "#" in source.source_locator else ""
-            if len(matching) != 1 or stable_id not in matching[0].stable_child_ids:
+            child_ids = (
+                indexed.stable_child_ids_by_fingerprint_id.get(
+                    id(matching[0]), frozenset()
+                )
+                if len(matching) == 1
+                else frozenset()
+            )
+            if len(matching) != 1 or stable_id not in child_ids:
                 raise CoverageError(
                     f"GitHub child fingerprint missing stable ID: {source.source_id}|{stable_id}"
                 )
     transient = [
         source.source_id
-        for source in sources
+        for source in indexed.sources
         if source.availability_status == "transient-failure"
     ]
     if transient:
@@ -1291,6 +1432,7 @@ def verify_source_capture(
     repository = Path(repo).resolve(strict=True)
     frozen_sources = tuple(sources)
     frozen_claims = tuple(claims)
+    claim_index = _index_document_claims(frozen_claims)
     paths = tuple(Path(path) for path in archive_paths)
     staged = tuple(staged_output_paths)
     source_ids = [source.source_id for source in frozen_sources]
@@ -1322,11 +1464,18 @@ def verify_source_capture(
         frozen_sources, semantic, parent_truth
     )
     external_expected, external_captured = _verify_external_inputs(
-        repository, snapshot, frozen_sources, frozen_claims
+        repository,
+        snapshot,
+        frozen_sources,
+        frozen_claims,
+        claim_index=claim_index,
     )
     _stable_set("external inputs", external_expected, external_captured)
     document_expected, document_captured = _verify_documents(
-        snapshot, frozen_sources, frozen_claims
+        snapshot,
+        frozen_sources,
+        frozen_claims,
+        claim_index=claim_index,
     )
     ai_expected, ai_captured = _verify_ai(snapshot, frozen_sources)
     github_expected, github_captured, github_detail = _verify_github(
@@ -1362,7 +1511,10 @@ def verify_source_capture(
             raise CoverageError(f"stored archive member missing stable ID: {required[0]}")
         reconstructed = verify_archive_members(frozen_sources, paths)
         verify_document_claim_archive_binding(
-            frozen_sources, frozen_claims, reconstructed
+            frozen_sources,
+            frozen_claims,
+            reconstructed,
+            claim_index=claim_index,
         )
     relation_ledger = validate_downstream_relation_references(
         frozen_sources, claims=frozen_claims

@@ -78,10 +78,28 @@ def test_large_artifact_is_deterministic_indexed_gzip(tmp_path: Path):
 
     payload = json.loads(first.read_text(encoding="utf-8"))
     assert payload["artifact_format"] == SHARDED_JSONL_FORMAT
+    assert payload["compression"] == "gzip-9-mtime-0"
     assert [item["path"] for item in payload["shards"]] == [
         "records-part-001.jsonl.gz",
         "records-part-002.jsonl.gz",
     ]
+    expected_index = json.dumps(
+        {
+            "artifact_format": SHARDED_JSONL_FORMAT,
+            "canonical_byte_count": first_descriptor.canonical_byte_count,
+            "canonical_sha256": first_descriptor.canonical_sha256,
+            "compression": "gzip-9-mtime-0",
+            "logical_path": "records.jsonl",
+            "record_count": first_descriptor.record_count,
+            "record_type": "SourceRecord",
+            "schema_version": 1,
+            "shards": [item.to_dict() for item in first_descriptor.shards],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8") + b"\n"
+    assert first.read_bytes() == expected_index
     assert first.read_bytes() == second.read_bytes()
     for name in first_descriptor.physical_paths[1:]:
         assert (first.parent / name).read_bytes() == (second.parent / name).read_bytes()
@@ -130,6 +148,14 @@ def _write_index(target: Path, payload: dict[str, object]) -> None:
             payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")
         + b"\n"
+    )
+
+
+def _corrupt_deflate(compressed: bytes) -> bytes:
+    return (
+        compressed[:10]
+        + bytes([(compressed[10] & 0xF8) | 0x07])
+        + compressed[11:]
     )
 
 
@@ -237,6 +263,105 @@ def test_indexed_reader_rejects_mixed_index_and_record_content(tmp_path: Path):
     target.write_bytes(target.read_bytes() + _line("source-c")[1])
 
     with pytest.raises(JsonlArtifactError, match="mixed index/record"):
+        _read(target)
+
+
+def test_plain_multirecord_artifact_may_mention_artifact_format(tmp_path: Path):
+    values = (
+        {
+            "payload": {
+                "artifact_format": "ordinary nested model data",
+                "note": "artifact_format is not an index marker here",
+            },
+            "source_id": "source-a",
+        },
+        {
+            "artifact_format": "ordinary later model field",
+            "source_id": "source-b",
+        },
+    )
+    raw = b"".join(
+        json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        + b"\n"
+        for value in values
+    )
+    target = tmp_path / "records.jsonl"
+    target.write_bytes(raw)
+
+    descriptor, loaded = _read(target)
+
+    assert descriptor.storage_mode == "plain"
+    assert descriptor.record_count == 2
+    assert loaded == raw
+
+
+def test_first_object_unknown_artifact_format_is_rejected(tmp_path: Path):
+    target = _make_two_shard_artifact(tmp_path)
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["artifact_format"] = "unknown-format"
+    _write_index(target, payload)
+
+    with pytest.raises(JsonlArtifactError, match="unknown artifact format"):
+        _read(target)
+
+
+@pytest.mark.parametrize(
+    "compression", ["gzip", "gzip-9", "gzip-9-mtime-1"]
+)
+def test_indexed_reader_rejects_noncanonical_compression_token(
+    tmp_path: Path, compression: str
+):
+    target = _make_two_shard_artifact(tmp_path)
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload["compression"] = compression
+    _write_index(target, payload)
+
+    with pytest.raises(JsonlArtifactError, match="unknown compression"):
+        _read(target)
+
+
+def test_staged_corrupt_deflate_is_path_qualified_artifact_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    import portfolio_builder.jsonl_artifact as artifact_module
+
+    target = tmp_path / "records.jsonl"
+    original_gzip_bytes = artifact_module._gzip_bytes
+    monkeypatch.setattr(
+        artifact_module,
+        "_gzip_bytes",
+        lambda value: _corrupt_deflate(original_gzip_bytes(value)),
+    )
+
+    with pytest.raises(
+        JsonlArtifactError,
+        match=rf"{target}: staged gzip member",
+    ):
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[_line("source-a", "x" * 40)],
+            target_bytes=1,
+            max_compressed_bytes=256,
+        )
+
+    assert not list(tmp_path.iterdir())
+
+
+def test_indexed_corrupt_deflate_is_path_qualified_artifact_error(tmp_path: Path):
+    target = _make_two_shard_artifact(tmp_path)
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    first = payload["shards"][0]
+    physical = target.parent / first["path"]
+    corrupted = _corrupt_deflate(physical.read_bytes())
+    physical.write_bytes(corrupted)
+    first["compressed_byte_count"] = len(corrupted)
+    first["compressed_sha256"] = hashlib.sha256(corrupted).hexdigest()
+    _write_index(target, payload)
+
+    with pytest.raises(JsonlArtifactError, match=rf"{target}: gzip member"):
         _read(target)
 
 
@@ -446,6 +571,49 @@ def test_public_limits_and_blob_limit_are_hard_bounded(
             max_compressed_bytes=128,
         )
     assert not list(tmp_path.iterdir())
+
+
+def test_oversized_single_record_reports_safe_identity_and_hashes_without_mutation(
+    tmp_path: Path,
+):
+    target = tmp_path / "records.jsonl"
+    publish_jsonl_artifact(
+        target,
+        record_type="SourceRecord",
+        records=[_line("published")],
+        target_bytes=128,
+        max_compressed_bytes=128,
+    )
+    before = _files(tmp_path)
+    identity, line = _line("source-private", "DO_NOT_LEAK_PAYLOAD_BODY")
+    destination = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", mode="wb", compresslevel=9, fileobj=destination, mtime=0
+    ) as stream:
+        stream.write(line)
+    compressed = destination.getvalue()
+
+    with pytest.raises(JsonlArtifactError) as captured:
+        publish_jsonl_artifact(
+            target,
+            record_type="SourceRecord",
+            records=[(identity, line)],
+            target_bytes=1,
+            max_compressed_bytes=1,
+        )
+
+    message = str(captured.value)
+    assert str(target) in message
+    assert f"stable_identity={identity}" in message
+    assert f"compressed_byte_count={len(compressed)}" in message
+    assert f"compressed_sha256={hashlib.sha256(compressed).hexdigest()}" in message
+    assert f"uncompressed_sha256={hashlib.sha256(line).hexdigest()}" in message
+    assert "DO_NOT_LEAK_PAYLOAD_BODY" not in message
+    assert _files(tmp_path) == before
+    assert not any(
+        ".tmp" in item.name or ".bak" in item.name or ".recovery" in item.name
+        for item in tmp_path.iterdir()
+    )
 
 
 def test_completed_shards_are_staged_before_iterator_advances(

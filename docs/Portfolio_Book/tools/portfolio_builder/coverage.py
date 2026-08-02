@@ -1534,13 +1534,17 @@ def _specialized_inventory(
     name: str,
     sources: Iterable[SourceRecord],
     predicate: Callable[[SourceRecord], bool],
+    *,
+    claim_universe: Iterable[DocumentClaim],
 ) -> JsonlArtifactDescriptor:
     frozen_sources = tuple(sources)
+    frozen_claims = tuple(claim_universe)
     return write_jsonl(
         output_dir / name,
         tuple(source for source in frozen_sources if predicate(source)),
         model_type=SourceRecord,
         source_universe=frozen_sources,
+        claim_universe=frozen_claims,
     )
 
 
@@ -1639,13 +1643,25 @@ def collect_all(
             claim_universe=claims,
         ),
         _specialized_inventory(
-            output, PR_INVENTORY_NAME, sources, _is_pr_inventory_source
+            output,
+            PR_INVENTORY_NAME,
+            sources,
+            _is_pr_inventory_source,
+            claim_universe=claims,
         ),
         _specialized_inventory(
-            output, ISSUE_INVENTORY_NAME, sources, _is_issue_inventory_source
+            output,
+            ISSUE_INVENTORY_NAME,
+            sources,
+            _is_issue_inventory_source,
+            claim_universe=claims,
         ),
         _specialized_inventory(
-            output, AI_INVENTORY_NAME, sources, _is_ai_inventory_source
+            output,
+            AI_INVENTORY_NAME,
+            sources,
+            _is_ai_inventory_source,
+            claim_universe=claims,
         ),
     ]
     coverage = replace(
@@ -1808,16 +1824,17 @@ def verify_capture_files(
     if not isinstance(payload, dict):
         raise ValueError("snapshot manifest must be a JSON object")
     snapshot = SnapshotManifest.from_dict(payload)
-    source_values, source_descriptor = read_jsonl_with_descriptor(
-        output / SOURCE_NAME, SourceRecord
-    )
-    sources = tuple(source_values)
     claim_values, claim_descriptor = read_jsonl_with_descriptor(
         output / CLAIM_NAME,
         DocumentClaim,
-        source_universe=sources,
     )
     claims = tuple(claim_values)
+    source_values, source_descriptor = read_jsonl_with_descriptor(
+        output / SOURCE_NAME,
+        SourceRecord,
+        claim_universe=claims,
+    )
+    sources = tuple(source_values)
     coverage_path = output / COVERAGE_JSON_NAME
     try:
         locked_coverage = json.loads(coverage_path.read_text(encoding="utf-8"))

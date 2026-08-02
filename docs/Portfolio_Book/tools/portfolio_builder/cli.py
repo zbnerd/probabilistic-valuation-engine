@@ -32,9 +32,32 @@ def _staged_paths(repo: Path) -> tuple[str, ...]:
         check=True,
         capture_output=True,
     ).stdout
-    return tuple(
+    staged = tuple(
         value.decode("utf-8") for value in output.split(b"\0") if value
     )
+    if not staged:
+        return staged
+    unstaged = subprocess.run(
+        (
+            "git",
+            "diff",
+            "--name-only",
+            "--no-renames",
+            "--no-ext-diff",
+            "-z",
+            "--",
+            *staged,
+        ),
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    ).stdout
+    mismatched = tuple(
+        value.decode("utf-8") for value in unstaged.split(b"\0") if value
+    )
+    if mismatched:
+        raise CoverageError(f"staged index/worktree mismatch: {mismatched[0]}")
+    return staged
 
 
 def _capture_snapshot(arguments: argparse.Namespace) -> int:

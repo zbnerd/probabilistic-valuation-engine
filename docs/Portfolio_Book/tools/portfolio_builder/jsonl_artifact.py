@@ -11,12 +11,14 @@ import shutil
 import tarfile
 import tempfile
 import uuid
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
 
 SHARDED_JSONL_FORMAT = "canonical-jsonl-gzip-shards-v1"
+GZIP_COMPRESSION = "gzip-9-mtime-0"
 PLAIN_JSONL_MODE = "plain"
 SCHEMA_VERSION = 1
 DEFAULT_TARGET_BYTES = 50_000_000
@@ -280,7 +282,7 @@ def _index_bytes(
         "artifact_format": SHARDED_JSONL_FORMAT,
         "canonical_byte_count": canonical_byte_count,
         "canonical_sha256": canonical_sha256,
-        "compression": "gzip",
+        "compression": GZIP_COMPRESSION,
         "logical_path": target.name,
         "record_count": sum(item.record_count for item in shards),
         "record_type": record_type,
@@ -332,8 +334,11 @@ def _validate_staged_shard(
         raise _error(target, "staged compressed SHA-256")
     if len(compressed) < 10 or compressed[4:8] != b"\0\0\0\0" or compressed[3] & 0x08:
         raise _error(target, "staged gzip header")
-    with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
-        lines = list(stream)
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
+            lines = list(stream)
+    except (EOFError, OSError, zlib.error) as error:
+        raise _error(target, "staged gzip member") from error
     raw = b"".join(lines)
     if len(raw) != descriptor.uncompressed_byte_count:
         raise _error(target, "staged uncompressed byte count")
@@ -350,9 +355,18 @@ def _stage_shard(
     target: Path, ordinal: int, value: bytes, max_compressed_bytes: int
 ) -> tuple[JsonlShardDescriptor, tuple[Path, Path]]:
     compressed = _gzip_bytes(value)
-    if len(compressed) > max_compressed_bytes:
-        raise _error(target, "compressed byte limit")
     descriptor = _shard_descriptor(ordinal, target.stem, value, compressed)
+    if len(compressed) > max_compressed_bytes:
+        if descriptor.record_count == 1:
+            raise _error(
+                target,
+                "compressed byte limit for single record: "
+                f"stable_identity={descriptor.first_identity} "
+                f"compressed_byte_count={descriptor.compressed_byte_count} "
+                f"compressed_sha256={descriptor.compressed_sha256} "
+                f"uncompressed_sha256={descriptor.uncompressed_sha256}",
+            )
+        raise _error(target, "compressed byte limit")
     destination = target.parent / descriptor.path
     temporary = _stage_bytes(destination, compressed)
     try:
@@ -621,22 +635,23 @@ def publish_jsonl_artifact(
 
 
 def _parse_index(target: Path, raw: bytes, expected_record_type: str) -> tuple[tuple[JsonlShardDescriptor, ...], Mapping[str, object]]:
+    first_line = raw.split(b"\n", maxsplit=1)[0]
+    if raw.startswith(first_line + b"\n"):
+        first_line += b"\n"
     try:
-        payload = json.loads(raw)
+        payload = json.loads(first_line)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        if b'"artifact_format"' in raw:
-            raise _error(target, "mixed index/record content") from error
         raise _NotIndex from error
     if not isinstance(payload, Mapping) or "artifact_format" not in payload:
         raise _NotIndex
-    if _canonical_json_line(payload) != raw:
+    if first_line != raw or _canonical_json_line(payload) != raw:
         raise _error(target, "mixed index/record content")
     _require_exact_keys(payload, _INDEX_KEYS, "index")
     if _required_string(payload, "artifact_format") != SHARDED_JSONL_FORMAT:
         raise _error(target, "unknown artifact format")
     if _required_exact_int(payload, "schema_version", SCHEMA_VERSION) != SCHEMA_VERSION:
         raise _error(target, "schema version")
-    if _required_string(payload, "compression") != "gzip":
+    if _required_string(payload, "compression") != GZIP_COMPRESSION:
         raise _error(target, "unknown compression")
     if _required_string(payload, "logical_path") != target.name:
         raise _error(target, "logical basename")
@@ -701,7 +716,7 @@ def _indexed_pass(target: Path, shards: tuple[JsonlShardDescriptor, ...], payloa
         try:
             with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
                 lines = list(stream)
-        except (EOFError, OSError) as error:
+        except (EOFError, OSError, zlib.error) as error:
             raise _error(target, "gzip member") from error
         uncompressed = b"".join(lines)
         if len(uncompressed) != shard.uncompressed_byte_count:

@@ -152,6 +152,44 @@ def test_cli_resolves_task_10_paths_from_invocation_directory(
     ]
 
 
+@pytest.mark.parametrize("oversized_index", [False, True])
+def test_staged_paths_reject_index_worktree_byte_mismatch(
+    tmp_path: Path, oversized_index: bool
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(
+        ("git", "init", "-b", "main"),
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    relative = Path("docs/Portfolio_Book/output/research/source_records.jsonl")
+    target = repo / relative
+    target.parent.mkdir(parents=True)
+    if oversized_index:
+        with target.open("wb") as stream:
+            stream.truncate(95_000_000)
+    else:
+        target.write_bytes(b'{"source_id":"staged"}\n')
+    subprocess.run(
+        ("git", "add", relative.as_posix()),
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    target.write_bytes(b'{"source_id":"safe-substitute"}\n')
+
+    with pytest.raises(
+        CoverageError,
+        match=(
+            "staged index/worktree mismatch: "
+            "docs/Portfolio_Book/output/research/source_records.jsonl"
+        ),
+    ):
+        cli_module._staged_paths(repo)
+
+
 def _hash(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -246,6 +284,27 @@ def _source(
     )
 
 
+def _claim(claim_id: str, document_source_id: str) -> DocumentClaim:
+    return DocumentClaim(
+        claim_id=claim_id,
+        document_source_id=document_source_id,
+        source_path="docs/evidence.md",
+        evidence_scope="project-evidence",
+        claim_authority="primary-record",
+        unit_kind="line",
+        line_start=1,
+        line_end=1,
+        page_index=None,
+        block_index=0,
+        raw_hash="3" * 64,
+        stored_hash="4" * 64,
+        stored_members=(),
+        text="A captured document claim.",
+        classification="unreviewed",
+        parse_status="parsed",
+    )
+
+
 def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
     external_path = tmp_path / "private/resume.pdf"
     external_path.parent.mkdir()
@@ -302,6 +361,93 @@ def _snapshot(tmp_path: Path) -> tuple[SnapshotManifest, Path]:
             github_window=window,
         ),
         external_path,
+    )
+
+
+def test_collect_write_verify_accepts_source_relation_to_document_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    snapshot, _ = _snapshot(tmp_path)
+    snapshot = replace(snapshot, finalized_at=None, github_window=None)
+    output = tmp_path / "docs/Portfolio_Book/output/research"
+    output.mkdir(parents=True)
+    snapshot_path = output / SNAPSHOT_NAME
+    snapshot_path.write_bytes(
+        json.dumps(snapshot.to_dict(), sort_keys=True, separators=(",", ":")).encode()
+        + b"\n"
+    )
+    claim = _claim("DOC-CLAIM-1", "DOC-SOURCE")
+    relation = ExplicitRelation.create(
+        owner_source_id="DOC-SOURCE",
+        relation_type="supports",
+        target_source_id=claim.claim_id,
+        evidence_locator="docs/evidence.md#L1",
+        evidence_hash=claim.raw_hash,
+    )
+    source = replace(
+        _source("DOC-SOURCE", "tracked-document", members=()),
+        explicit_relations=(relation,),
+    )
+    window = GitHubSnapshotWindow("s", "e", "r", (), (), {}, ())
+    github = ReconciliationResult(
+        (), window, (ReconciliationPass(0, (), ()),), ()
+    )
+    section = CoverageSection.complete((), ())
+    unlocked = CaptureCoverageManifest(
+        1,
+        "capture",
+        "complete",
+        snapshot.snapshot_id,
+        1,
+        1,
+        1,
+        0,
+        {"refs": section},
+        (),
+    )
+
+    monkeypatch.setattr(
+        coverage_module,
+        "collect_git_evidence",
+        lambda *_args: GitCapture((), (), (), (), (), ()),
+    )
+    monkeypatch.setattr(coverage_module, "_write_git_archives", lambda *_args: ())
+    monkeypatch.setattr(
+        coverage_module,
+        "collect_documents",
+        lambda *_args: ([source], [claim]),
+    )
+    monkeypatch.setattr(coverage_module, "collect_ai_traces", lambda *_args: iter(()))
+    monkeypatch.setattr(coverage_module, "reconcile_github", lambda **_kwargs: github)
+    monkeypatch.setattr(coverage_module, "derive_explicit_relations", lambda _sources: ())
+    monkeypatch.setattr(
+        coverage_module,
+        "attach_explicit_relations",
+        lambda sources, _relations: tuple(sources),
+    )
+    monkeypatch.setattr(
+        coverage_module,
+        "verify_source_capture",
+        lambda **_kwargs: unlocked,
+    )
+
+    collected = collect_all(
+        repo=tmp_path,
+        snapshot_path=snapshot_path,
+        output_dir=output,
+        github_client=object(),  # type: ignore[arg-type]
+        finalized_at="2026-08-01T00:00:03Z",
+    )
+    verified = verify_capture_files(
+        repo=tmp_path,
+        snapshot_path=snapshot_path,
+        output_dir=output,
+    )
+
+    assert collected.sources == (source,)
+    assert collected.claims == (claim,)
+    assert tuple(item.to_dict() for item in verified.ledger_artifacts) == tuple(
+        item.to_dict() for item in collected.coverage.ledger_artifacts
     )
 
 
@@ -494,7 +640,7 @@ def test_specialized_capture_ledgers_preserve_exact_filtered_source_order(
     )
     for name, predicate, expected_ids in cases:
         descriptor = coverage_module._specialized_inventory(
-            tmp_path, name, sources, predicate
+            tmp_path, name, sources, predicate, claim_universe=()
         )
         records, inspected = read_jsonl_with_descriptor(
             tmp_path / name,
@@ -2127,7 +2273,10 @@ def test_collect_all_uses_existing_snapshot_orders_stages_and_finalizes_last(
     monkeypatch.setattr(coverage_module, "write_jsonl", write_ledger)
     monkeypatch.setattr(coverage_module, "_write_commit_csv", lambda *args: order.append("csv"))
 
-    def write_specialized(_output, name, _sources, _predicate):
+    def write_specialized(
+        _output, name, _sources, _predicate, *, claim_universe
+    ):
+        assert tuple(claim_universe) == ()
         order.append("inventory")
         return _plain_descriptor(name, "SourceRecord", 0)
 

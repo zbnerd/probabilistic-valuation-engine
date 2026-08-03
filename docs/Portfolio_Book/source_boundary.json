@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "source_snapshot_head": "6ca9f890f3fa2d22ebd2d5480fe8775308f2ebbd",
+  "source_snapshot_tree": "a7e29167925c83eb14572051a8da7ae9ab37f44b",
+  "first_excluded_commit": "aa2338c54291e5ad2d81673c0bc4fabf4577cec4",
+  "first_excluded_parent": "6ca9f890f3fa2d22ebd2d5480fe8775308f2ebbd",
+  "workflow_ref": "refs/heads/docs/exhaustive-portfolio-rebuild",
+  "external_input_files": [
+    {
+      "role": "renewal-guide",
+      "path": "docs/Portfolio_Book/2026년 이력서 포트폴리오 리뉴얼.pdf",
+      "byte_count": 3317790,
+      "sha256": "e67b747879168c5864eef1ea85cde54a658c0ea42f58d08e5ef752b706a59a7b"
+    },
+    {
+      "role": "id-photo-source-resume",
+      "path": "docs/Portfolio_Book/이력서.pdf",
+      "byte_count": 661091,
+      "sha256": "050ebd6dc8d02e1969d9829d0d93055075fe662d75819d95802a1074b543db2e"
+    },
+    {
+      "role": "legacy-portfolio-reference",
+      "path": "docs/Portfolio_Book/포트폴리오.pdf",
+      "byte_count": 250265,
+      "sha256": "fb2104e6e9167c9162b865c25ca9a9afbe238250ec4af252f91659729aadba7b"
+    }
+  ],
+  "legacy_owned_outputs": [
+    {
+      "path": "docs/Portfolio_Book/output/research/ai_traces_summary.md",
+      "git_blob_oid": "b0eca5493ee0b8ab9fa8880108bacf9477524e59",
+      "sha256": "d49d4a7b2238b161372752923d37b8577232dba1ac9f18cb2ae5ecc9286996cb"
+    },
+    {
+      "path": "docs/Portfolio_Book/output/research/evidence_ledger.md",
+      "git_blob_oid": "ab1cbb69e42e2815a8792ca07627db0810560c0d",
+      "sha256": "a3ce843d1f7f2a5f6659e4f5ec6212651ed1980468ed19f2f2dd2298812f06fb"
+    },
+    {
+      "path": "docs/Portfolio_Book/output/research/issue_inventory.md",
+      "git_blob_oid": "27cf757f5fbf2875c32af636bc8840414e6cfb4f",
+      "sha256": "25d7f8c1419560f8bd41841b7a1c6079371203438f760f73f52638037468ea13"
+    },
+    {
+      "path": "docs/Portfolio_Book/output/research/pr_inventory.md",
+      "git_blob_oid": "97e5261f8b02ffc0c7f45d2c706ba02466a5cad8",
+      "sha256": "afdc9df3c09cff84ec406bf066852393ddd9605f44c94afb4dcafbd99c3fb8b1"
+    },
+    {
+      "path": "docs/Portfolio_Book/output/research/source_inventory.md",
+      "git_blob_oid": "812a555b568be3bfe2deedf2be7b1c7075c8e7f4",
+      "sha256": "49156b16d39cc3fb3db1235659ee3192c9cefabe10577f325323b35ab734ff7b"
+    },
+    {
+      "path": "docs/Portfolio_Book/output/research/technical_evidence_candidates.md",
+      "git_blob_oid": "4544aa93c0c9de7f2fbf2e9cb2cb241948e12a0b",
+      "sha256": "e0fc568582270a21029ab354a6d40e3cf0f9242601ca51ea5a1e9d54bab0539f"
+    }
+  ]
+}

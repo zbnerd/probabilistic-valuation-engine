@@ -3,1070 +3,1498 @@
 ## Scope and method
 
 - Repository: `zbnerd/probabilistic-valuation-engine`
-- Retrieved (UTC): 2026-08-01T05:40:48Z
-- Enumeration: GitHub App `search_prs` (connector-first), then authenticated GitHub REST `GET /repos/zbnerd/probabilistic-valuation-engine/pulls?state=all&per_page=100` with `--paginate`, independently checked against GitHub Search `is:pr`.
-- Counts: REST enumeration 709 unique PR numbers; Search `total_count` 709; duplicate count 0. GraphQL repository `pullRequests.totalCount` 709.
-- Detail source: authenticated GitHub GraphQL `repository.pullRequests`, ordered by `CREATED_AT` ascending. For each record the query includes PR metadata, all available commits/reviews/conversation comments/closing-issue references/file metadata up to 100 each. Counts disclose a connection exceeding the returned sample.
-- Privacy: email-like strings in summaries are redacted; no credential material is reproduced.
+- Original retrieval (UTC): 2026-08-01T05:40:48Z; this preserved the original 709 records below.
+- Live reconciliation (UTC): 2026-08-08T14:16:30Z. Authenticated GitHub REST `GET /repos/zbnerd/probabilistic-valuation-engine/pulls?state=all&per_page=100` was read with `--paginate`, independently checked against GitHub Search `is:pr` and GraphQL `repository.pullRequests.totalCount`.
+- Live counts: REST enumeration 710 unique PR numbers; Search `total_count` 710 (`incomplete_results: false`); GraphQL total 710; duplicate count 0. REST state distribution: 710 closed, of which 699 have `merged_at` and 11 are closed without `merged_at`; 0 open.
+- Original detail source: authenticated GitHub GraphQL `repository.pullRequests`, ordered by `CREATED_AT` ascending, for the 500 records that completed in the original aggregate retrieval.
+- Detail-gap refresh (UTC): 2026-08-08T14:55:24Z. The 209 records previously blocked by aggregate GraphQL HTTP 502, plus live-added PR #1464, were read independently. Each PR used paginated REST connections for reviews, review comments, conversation comments, commits, and changed files; formal linked issues used paginated GraphQL `closingIssuesReferences`. GitHub caps PR #1196's 288-commit relation at 250 nodes, so its full set is the locally reachable `head ^base` range: 288 unique objects matching API metadata, with all 250 API-returned SHAs contained in the set.
+- Deterministic companion: [`pr_detail_inventory.jsonl`](./pr_detail_inventory.jsonl) contains 210 records sorted by PR number. It preserves complete connected commit SHAs (including all 50 for PR #1464), all returned file paths, discussion IDs/timestamps, formal linked issues, and hashes/byte counts rather than bodies for untrusted free-form discussion text.
+- Privacy: email-like strings in Markdown summaries remain redacted; credential material and raw discussion bodies are not reproduced.
 
 ## Interpretation safeguards
 
 - `MERGED`/a non-null `mergedAt` is the sole basis for calling a PR merged. `CLOSED` without that evidence is explicitly treated as not applied.
-- The change/resolution statement is based on returned changed-file metadata (path, type, additions, deletions) plus commit headlines and PR body summary; it is not a claim that unmerged work was deployed.
+- The change/resolution statement is based on returned changed-file metadata (path, type, additions, deletions) plus commit IDs and PR body summary; it is not a claim that unmerged work was deployed.
 - “Linked issues” means GitHub `closingIssuesReferences`; textual mentions may be present but are not asserted as formal links.
-- “Discussion” reports all returned review/comment counts and compact evidence. Connections with a count above 100 are marked incomplete.
+- “Discussion” separates review submissions, inline review comments, and conversation comments. The refreshed records were followed through every API page, and their returned counts were checked against GitHub totals.
 
-## Important limitation
+## Detail completeness
 
-The detailed GraphQL query repeatedly returned HTTP 502 for the final 209 enumerated PR records. Those records are still enumerated from independently paginated REST data, but their reviews, discussion, connected commit SHAs, formal closing links, and changed-file metadata are explicitly recorded as inaccessible—not inferred. The inventory therefore has complete PR-number coverage (709/709), but not complete per-record detail for that 209-record subset.
+The earlier 209-record HTTP-502 limitation is closed by the per-PR refresh above. For every refreshed record, connected commit and changed-file counts match PR REST metadata; review counts match GraphQL totals; review-comment and conversation-comment counts match PR REST metadata; and formal closing-issue counts match GraphQL totals. The JSONL companion is the complete machine-readable evidence surface for those connections, while this Markdown remains compact.
 
 ## Records
 
 <!-- PR_RECORDS -->
 ### PR #1455 — fix(infra): harden airflow-db after container compromise
 - author zbnerd; closed; created 2026-07-03T02:15:15Z; closed 2026-07-03T02:16:34Z; merged yes/2026-07-03T02:16:34Z; merge commit bcb7a5b54844e7242b1303a8f4e6b4c389b67a04. Body: ## Summary - `maple-airflow-db` was compromised by a **cryptominer**. Entry vector: internet-exposed postgres port (`5432 → 0.0.0.…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1455.
+- commits: 1 [fd0aa22]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +306/-4]. Sample: MODIFIED `.gitignore` +3/-0; MODIFIED `docker-compose.airflow.yml` +10/-4; ADDED `docs/23_Incident_Response_Journey/2026-07-03-airflow-db-container-compromise.md` +293/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1456 — docs(incident): enhance airflow-db compromise report
 - author zbnerd; closed; created 2026-07-03T02:24:47Z; closed 2026-07-03T02:42:50Z; merged yes/2026-07-03T02:42:50Z; merge commit 7d3411a5c9b54bba49c887ed234fc43186d0688d. Body: ## Summary Enhance the 2026-07-03 incident report per review feedback. Adds the sections expected of a professional Security Incid…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1456.
+- commits: 1 [070345d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +119/-12]. Sample: MODIFIED `docs/23_Incident_Response_Journey/2026-07-03-airflow-db-container-compromise.md` +119/-12. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1457 — docs(incident): root-cause framing + incident timeline (MTTD/MTTC/MTTR)
 - author zbnerd; closed; created 2026-07-03T03:01:16Z; closed 2026-07-03T03:26:55Z; merged yes/2026-07-03T03:26:55Z; merge commit 1a3d26f33a0d9e5c37f2920e550ed307ccc32271. Body: ## Summary Two refinements to the 2026-07-03 incident report, both per review: **1. Root-cause framing (§7)** — `0.0.0.0` bind is …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1457.
+- commits: 2 [70c6911, d7fb0fd]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +68/-5]. Sample: MODIFIED `docs/23_Incident_Response_Journey/2026-07-03-airflow-db-container-compromise.md` +68/-5. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1458 — docs(incident): add payload-vs-capability severity framing
 - author zbnerd; closed; created 2026-07-03T03:29:34Z; closed 2026-07-03T03:31:50Z; merged yes/2026-07-03T03:31:50Z; merge commit 3b990969ac83ff2666bf119c3074f80db5589d68. Body: ## Summary Reframes severity: the cryptominer was the **payload**, but the achieved **capability** was arbitrary code execution as…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1458.
+- commits: 1 [dbbbf15]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +22/-1]. Sample: MODIFIED `docs/23_Incident_Response_Journey/2026-07-03-airflow-db-container-compromise.md` +22/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1459 — infra(adr-744): move services to maple-network bridge, force loopback-only
 - author zbnerd; closed; created 2026-07-03T10:13:32Z; closed 2026-07-03T10:13:41Z; merged yes/2026-07-03T10:13:41Z; merge commit 40ac1b9a27de5ba76aaa53b2b5a421dd0d66999d. Body: ## Summary Post-incident hardening (incident #1455/#1456 — airflow-db cryptominer). Closes the 0.0.0.0-exposed service posture tha…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1459.
+- commits: 1 [cd452b8]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=1, MODIFIED=4; +203/-57]. Sample: MODIFIED `docker-compose.airflow.yml` +14/-10; MODIFIED `docker-compose.services.yml` +5/-8; MODIFIED `docker-compose.yml` +36/-25. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1460 — feat(ext-api): add per-endpoint Prometheus counters
 - author zbnerd; closed; created 2026-07-04T07:39:43Z; closed 2026-07-04T07:39:51Z; merged yes/2026-07-04T07:39:51Z; merge commit 501c5a26ec6c3dae1db5b0e71d76f31e93347db9. Body: ## Summary - `external_api_nexon_total_ms_total{endpoint=...}` — cumulative ms of successful Nexon fetches per RANKING_FETCH / OCI…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1460.
+- commits: 1 [bdd1513]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +22/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/metrics/SnapshotFetchMetrics.kt` +7/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/metrics/SnapshotVolumeMetrics.kt` +14/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisher.kt` +1/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1461 — fix(ext-api): normalize endpoint case in recordUsersCompleted
 - author zbnerd; closed; created 2026-07-06T00:34:21Z; closed 2026-07-06T00:34:31Z; merged yes/2026-07-06T00:34:31Z; merge commit 0dd4a0f7efc0ec5ab7f402f057fc16fbbe781dab. Body: ## Summary PR #1460 introduced two per-endpoint counters but they emitted with mismatched `endpoint` tag case: - `external_api_nex…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1461.
+- commits: 1 [fc58fb1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +7/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisher.kt` +7/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1462 — Develop
 - author zbnerd; closed; created 2026-07-18T05:59:41Z; closed 2026-07-18T05:59:54Z; merged yes/2026-07-18T05:59:54Z; merge commit 5ff387d73799248905e7a55c67a1946366a4303a. Body: none
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1462.
+- commits: 58 [5f28d96, 5351f6d, c522c7f, 1c3eec4, dd99220, f749702, 1ec76cc, bd2974d, … +50]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 52 [ADDED=31, MODIFIED=21; +6254/-273]. Sample: MODIFIED `.gitignore` +3/-0; MODIFIED `README.md` +106/-191; MODIFIED `docker-compose.airflow.yml` +26/-7. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1463 — refactor: deepen ETL infrastructure ownership
 - author zbnerd; closed; created 2026-07-20T15:38:08Z; closed 2026-07-20T22:56:40Z; merged yes/2026-07-20T22:56:40Z; merge commit cf85917b5ce8a463a0cf4e4b04bcaed74a5be174. Body: ## Summary - Extract pipeline artifact identity, storage, and lifecycle ownership into `module-pipeline-artifact`. - Centralize Ka…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1463.
+- commits: 45 [3f0c34c, db62df5, 4da3985, a358092, 008c79b, b9b8810, 56946d3, 0ad4449, … +37]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 327 [ADDED=203, MODIFIED=109, REMOVED=13, RENAMED=2; +442498/-4788]. Sample: ADDED `.superpowers/sdd/task-5-report.md` +46/-0; ADDED `.superpowers/sdd/task-6-report.md` +43/-0; ADDED `.superpowers/sdd/task-7-report.md` +38/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
+
+### PR #1464 — docs(portfolio): capture exhaustive evidence snapshot
+- author/state/dates: zbnerd | MERGED | created 2026-08-03T04:27:57Z | closed 2026-08-03T04:29:06Z | merged yes at 2026-08-03T04:29:06Z | merge 79c30703f371692bc9b7e7f2d244dcc3f0166c60. Canonical link: https://github.com/zbnerd/probabilistic-valuation-engine/pull/1464.
+- body summary: portfolio evidence-capture, redaction, archive, coverage, and publication-validation tooling; this is author-supplied PR context, not an independent effectiveness claim.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1464.
+- commits: 50 [aa2338c, 123c464, 7b8dcd6, 645b980, 46e9226, d93e5d1, b90f862, 4741d7e, … +42]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 117 [ADDED=115, MODIFIED=2; +50157/-2627]. Sample: MODIFIED `docs/Portfolio_Book/output/build_source_inventory.py` +7/-284; ADDED `docs/Portfolio_Book/output/research/ai-trace-records-001.tar.gz` +0/-0; ADDED `docs/Portfolio_Book/output/research/ai-trace-records-002.tar.gz` +0/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1196 — feat(calculator): expose Caffeine cache stats to Prometheus
 - author zbnerd; closed; created 2026-06-08T04:13:36Z; closed 2026-06-08T04:29:23Z; merged yes/2026-06-08T04:29:23Z; merge commit 8d0272d510f21ef7a744232a87b7c18a2ec95515. Body: ## Summary - `CalculationCache`: add public `cache()` accessor for metrics-only access - `CacheMetrics`: register 5 Prometheus gau…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1196.
+- commits: 288 [6fcf4b3, 26fe587, cc80121, da6e736, fe49d18, 3ecf1b7, fa69b23, 19f1976, … +280]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 578 [ADDED=324, MODIFIED=217, REMOVED=25, RENAMED=12; +41267/-5865]. Sample: ADDED `.claude/hooks/trace-lib.sh` +39/-0; ADDED `.claude/hooks/trace-prompt.sh` +20/-0; ADDED `.claude/hooks/trace-session-init.sh` +28/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1197 — style: apply spotless formatting across 270 files
 - author zbnerd; closed; created 2026-06-08T04:40:21Z; closed 2026-06-08T04:54:10Z; merged yes/2026-06-08T04:54:10Z; merge commit a42a7fc4c5fa95cd389ab036317cf0397008ff37. Body: ## Summary Pure import reordering + whitespace cleanup across 270 files. No semantic changes. ## Background `foojay-resolver-conve…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1197.
+- commits: 1 [4ae7196]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 270 [MODIFIED=270; +1628/-1413]. Sample: MODIFIED `module-app/src/main/java/maple/expectation/application/service/character/CharacterCreationService.java` +1/-1; MODIFIED `module-app/src/main/java/maple/expectation/application/service/character/GameCharacterService.java` +1/-1; MODIFIED `module-app/src/main/java/maple/expectation/application/service/character/OcidResolver.java` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1199 — docs(adr): ADR-723 + Guide §23 IO/CPU split pattern (#1125)
 - author zbnerd; closed; created 2026-06-08T06:05:47Z; closed 2026-06-08T06:10:21Z; merged yes/2026-06-08T06:10:21Z; merge commit a6a07c661d36cdc177a675db2a1afff01442a622. Body: ## Summary - ADR-723: IO/CPU 분리 패턴 5섹션 결정 기록 - Guide §23: Algorithm-based CPU 분류 + 모듈별 wrap 방식 (withContext/runBlocking) - Follow-…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1199.
+- commits: 7 [27543e0, 9c02068, 763e973, 22f1ffa, ac20c46, 13669fa, 65ca23c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=3, MODIFIED=1; +1170/-0]. Sample: ADDED `docs/01_ADR/ADR-723_io-cpu-split-pattern.md` +122/-0; MODIFIED `docs/03_Technical_Guides/async-concurrency.md` +165/-0; ADDED `docs/superpowers/plans/2026-06-08-io-cpu-split-pattern.md` +703/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1200 — refactor(infra): executor bean rename + expectationComputeExecutor IO/CPU split (#1126)
 - author zbnerd; closed; created 2026-06-08T07:36:33Z; closed 2026-06-08T07:44:08Z; merged yes/2026-06-08T07:44:08Z; merge commit bcbda2f96dfc8c0ddbca4a9ba731a5054f6641c5. Body: ## Summary - expectationComputeExecutor를 IO/CPU executor로 분리 (Issue #1126) - taskExecutor bean 이름 충돌 해결: `defaultAsyncExecutor` (C…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1200.
+- commits: 13 [dede921, 790e91b, 616fbaf, 6ad9ea0, 232ecb1, afe2c25, 6835af9, 4f6460c, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 18 [ADDED=3, MODIFIED=15; +1453/-70]. Sample: ADDED `docs/superpowers/plans/2026-06-08-1126-executor-rename-split.md` +1074/-0; ADDED `docs/superpowers/specs/2026-06-08-1126-executor-rename-split-design.md` +193/-0; MODIFIED `gradle/libs.versions.toml` +1/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1203 — refactor(calculator): SnapshotChunkProcessor parse/calc worker split + dispatcher override…
 - author zbnerd; closed; created 2026-06-08T08:52:38Z; closed 2026-06-08T08:55:45Z; merged yes/2026-06-08T08:55:45Z; merge commit e3d1006dd7022336112a0c37f2a1fe16fa4cc4fc. Body: ## Summary - parseWorkers + calcWorkers YAML 독립 설정 (#1127) - parseDispatcher + calcDispatcher YAML override (CoroutineDispatcherCo…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1203.
+- commits: 6 [a9ffb7b, 22c4cab, 85d31fb, 9145a4b, db13ebe, 84c150c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=2, MODIFIED=3; +387/-74]. Sample: MODIFIED `docs/03_Technical_Guides/async-concurrency.md` +1/-1; ADDED `docs/superpowers/specs/2026-06-08-1127-calculator-worker-split-design.md` +216/-0; ADDED `module-calculator/src/main/kotlin/maple/calculator/config/CoroutineDispatcherConverter.kt` +35/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1207 — refactor(ext-api): CPU 작업 Dispatchers.Default offload — 5 file (#1128)
 - author zbnerd; closed; created 2026-06-08T10:12:46Z; closed 2026-06-08T10:22:14Z; merged yes/2026-06-08T10:22:14Z; merge commit 10c794a705512c34f4be44a71a445d2bf1e9f521. Body: ## Summary - 5 file 에 CPU offload 적용 (Issue #1128) - 2 file follow-up (SnapshotFetchPhase dropped, UrgentCharacterRequestConsumer …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1207.
+- commits: 6 [be7a84c, 0344c62, 6c8bb24, 856869c, 56b5a79, 91884ab]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=1, MODIFIED=6; +666/-326]. Sample: ADDED `docs/superpowers/specs/2026-06-08-1128-external-api-cpu-offload-design.md` +198/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` +13/-3; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` +16/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1210 — refactor(sync): CPU 작업 Dispatchers.Default offload + OcidLookupRunConsumer executor dispat…
 - author zbnerd; closed; created 2026-06-08T12:58:14Z; closed 2026-06-08T13:01:19Z; merged yes/2026-06-08T13:01:19Z; merge commit d2307e65ed4beb428f36455b7faa69fbe4c8478d. Body: ## Summary - 5 file 의 CPU 작업을 `runBlocking(Dispatchers.Default) { }` 로 offload - OcidLookupRunConsumer 에 executor dispatch 추가 (Kaf…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1210.
+- commits: 7 [bd38ce8, b9a35a4, 67d4f27, 69c1826, f05a70e, 15ad61f, 43506c5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=2, MODIFIED=5; +620/-33]. Sample: ADDED `docs/superpowers/plans/2026-06-08-1129-synchronizer-cpu-offload.md` +372/-0; ADDED `docs/superpowers/specs/2026-06-08-1129-synchronizer-cpu-offload-design.md` +170/-0; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` +25/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1211 — refactor(rest): ReadModelQueryService.batchQuery + getStatus CPU offload (Closes #1130)
 - author zbnerd; closed; created 2026-06-08T13:08:01Z; closed 2026-06-08T13:17:50Z; merged yes/2026-06-08T13:17:50Z; merge commit ca472873421a3d1ddb03f9cf3d0cb3539cec5ad2. Body: ## Summary - 2 file 의 IO/CPU 분리 (ReadModelQueryService + ExpectationV6Controller) - 1 file (BatchReadScheduler) skip: BatchResolve…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1211.
+- commits: 3 [2c5bc1e, cf0bcf2, 8a837fe]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=2, MODIFIED=2; +393/-23]. Sample: ADDED `docs/superpowers/plans/2026-06-08-1130-rest-controller-io-cpu-split.md` +194/-0; ADDED `docs/superpowers/specs/2026-06-08-1130-rest-controller-io-cpu-split-design.md` +155/-0; MODIFIED `module-rest-controller/src/main/kotlin/maple/restcontroller/controller/ExpectationV6Controller.kt` +19/-10. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1212 — refactor(infra): ExternalApiWorker + PgmqWorker CPU/IO 분리 (Closes #1131)
 - author zbnerd; closed; created 2026-06-08T13:13:52Z; closed 2026-06-08T13:17:54Z; merged yes/2026-06-08T13:17:54Z; merge commit 30326c780e5b5d396fa6680bfc1325a3220c92f9. Body: ## Summary - ExternalApiWorker.runCalculationAndComplete: CPU section (calculate + serialize + gzip + SHA-256) on Dispatchers.Defa…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1212.
+- commits: 3 [746af5c, 341bb75, 0e8e0c5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +160/-29]. Sample: ADDED `docs/superpowers/specs/2026-06-08-1131-infra-worker-dispatcher-design.md` +116/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/PgmqWorker.kt` +5/-2; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/worker/ExternalApiWorker.kt` +39/-27. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1213 — feat(infra): expose ForkJoinPool.commonPool() metrics for ADR-723 saturation (Closes #1198…
 - author zbnerd; closed; created 2026-06-08T13:17:01Z; closed 2026-06-08T13:17:57Z; merged yes/2026-06-08T13:17:57Z; merge commit 779028bff87c981bc2d9a301aa6f50bf09b8262b. Body: ## Summary - ForkJoinPool.commonPool() 의 CPU activity 를 Prometheus 로 노출 - ADR-723 §4 cross-module saturation detection trigger ## …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1213.
+- commits: 1 [b4480ab]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +47/-0]. Sample: ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/metrics/ForkJoinPoolMetrics.kt` +47/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1214 — refactor(calc): deprecate workerCount, prepare for dispatcher as beans (Closes #1201)
 - author zbnerd; closed; created 2026-06-08T13:54:04Z; closed 2026-06-08T13:56:01Z; merged yes/2026-06-08T13:56:01Z; merge commit 6935da34ca0d6f415c497c5df85a34e3d3de1311. Body: Issue #1201: @Deprecated on workerCount (backward compat kept). #1202 status: parseDispatcher/calcDispatcher still String-based vi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1214.
+- commits: 1 [a2cc3e5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +10/-9]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/config/PipelineProperties.kt` +10/-9. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1215 — fix(ext-api): add authCharacterFetchExecutor bean (Closes #1206)
 - author zbnerd; closed; created 2026-06-08T13:56:02Z; closed 2026-06-08T13:57:03Z; merged yes/2026-06-08T13:57:03Z; merge commit a7880e8f58df83de9dfecaf5e3da0a95d2ff51a6. Body: Issue #1206: AuthCharacterFetchConsumer 의 @Qualifier("authCharacterFetchExecutor") 인자 wired. bean 정의 누락 → Spring startup fail 위험. …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1215.
+- commits: 1 [2fd3700]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +45/-0]. Sample: ADDED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthExecutorConfig.kt` +45/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1222 — feat(infra): V1 ObjectStorage foundation (issue #1216)
 - author zbnerd; closed; created 2026-06-09T10:21:00Z; closed 2026-06-09T10:21:24Z; merged yes/2026-06-09T10:21:24Z; merge commit aa4a8691859a0c00a42f266504ef4da936ba51dd. Body: ## Summary Implements VS1 of the macro MinIO storage migration spec (`docs/superpowers/specs/2026-06-09-minio-storage-migration-de…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1222.
+- commits: 16 [2d3c9ac, 7b8ba39, 6472707, a67ca5d, 4a61efb, 4129b7f, b69bb2a, e533fc9, … +8]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 26 [ADDED=15, MODIFIED=11; +3658/-2]. Sample: MODIFIED `.env.example` +15/-0; MODIFIED `build.gradle` +1/-0; MODIFIED `docker-compose.yml` +39/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1223 — docs(adr): ADR-725 Object Storage MinIO migration VS1+VS2 summary
 - author zbnerd; closed; created 2026-06-09T14:09:31Z; closed 2026-06-09T14:09:43Z; merged yes/2026-06-09T14:09:43Z; merge commit 38e6cbc3be1403211d1361d16f920b7303a3329a. Body: # VS2: Object Storage Migration + MinIO Readiness — PR Summary Closes #1217 (VS2). Captures the trade-off summary for VS1 (PR #122…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1223.
+- commits: 20 [3cd52b9, 2ac3aa8, 9fbea10, ef551a7, 3d17a68, fe71dcb, c8ae203, 3bc6708, … +12]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 58 [ADDED=14, MODIFIED=30, REMOVED=14; +3046/-1825]. Sample: MODIFIED `docs/01_ADR/ADR-022-redis-dependency-removal.md` +29/-1; ADDED `docs/01_ADR/ADR-725_object-storage-minio-migration-vs1-vs2.md` +117/-0; ADDED `docs/superpowers/plans/2026-06-09-v2-pipeline-modules-migration-plan.md` +1500/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1224 — VS3: Dev e2e MinIO validation tooling (#1218)
 - author zbnerd; closed; created 2026-06-10T03:09:54Z; closed 2026-06-10T04:50:03Z; merged yes/2026-06-10T04:50:03Z; merge commit 79fcbdf75fa85feb3bb540162cb112d477c4a4bd. Body: ## Summary VS3 dev cutover tooling per issue #1218: `STORAGE_BACKEND=minio` wrapper + MinIO-aware `pipeline-test` skill + ADR-725 …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 3 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1224.
+- commits: 14 [adf5a12, 746655a, cfdc725, af9be20, 72677c9, 63c16b4, 413400c, b7e9a17, … +6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [ADDED=10, MODIFIED=3; +2690/-1]. Sample: ADDED `.claude/skills/pipeline-test/SKILL.md` +464/-0; MODIFIED `.gitignore` +4/-1; MODIFIED `docs/01_ADR/ADR-725_object-storage-minio-migration-vs1-vs2.md` +24/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1225 — fix(module-external-api): ExecutorService return type for authCharacterFetchExecutor bean
 - author zbnerd; closed; created 2026-06-10T06:37:28Z; closed 2026-06-10T06:39:28Z; merged yes/2026-06-10T06:39:28Z; merge commit 6a48ee65231bcf1426e3671d5d27115440c6b955. Body: ## Problem `module-external-api` failed to boot with: \`\`\` NoSuchBeanDefinitionException: No qualifying bean of type 'ExecutorSe…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1225.
+- commits: 1 [b944ac8]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +3/-3]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthExecutorConfig.kt` +3/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1226 — fix(boot): wire StorageConfig + restore RunStatusTracker + executor types
 - author zbnerd; closed; created 2026-06-10T07:53:29Z; closed 2026-06-10T07:56:54Z; merged yes/2026-06-10T07:56:54Z; merge commit 31d899496d84b1bb64ad1be746e6565f81edcf11. Body: ## Summary Pipeline boot and runtime tracking broken by VS2 Object Storage migration. 8 surgical fixes across 3 modules — all test…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1226.
+- commits: 5 [62211f5, 9a9ac38, aa066dc, 5463e83, 46b19ed]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [MODIFIED=12; +93/-49]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +7/-0; MODIFIED `.gitignore` +1/-2; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1227 — fix(boot): OcidLookupPhase recursion + MinIO wiring + pipeline-test default
 - author zbnerd; closed; created 2026-06-10T09:19:37Z; closed 2026-06-10T09:20:25Z; merged yes/2026-06-10T09:20:25Z; merge commit b7a0c0c4715cb3ce9ddfc84b879f9ca495cde6f1. Body: ## Summary Three latent issues from the VS2 migration + the pipeline-test skill rewrite for MinIO default. ### OcidLookupPhase inf…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1227.
+- commits: 4 [0a8ef7b, 4e5459a, e6b911d, 6c78a28]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [MODIFIED=9; +102/-60]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +39/-30; MODIFIED `gradle/libs.versions.toml` +1/-0; MODIFIED `module-calculator/build.gradle` +1/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1228 — refactor(ext-api, cleanup): migrate to ObjectStorage (Tasks 1-14)
 - author zbnerd; closed; created 2026-06-10T12:36:32Z; closed 2026-06-10T13:39:07Z; merged yes/2026-06-10T13:39:07Z; merge commit 8b21ac532a024e888374c07c2d64ca4ae0d4768c. Body: ## Summary Migrates ext-api (writers, readers, phases, scheduler) and module-cleanup to use the unified `ObjectStorage` interface …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 6 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1228.
+- commits: 19 [97a4bce, 56ba266, d034419, 13b6ebc, 6a7a60a, 0eb8fda, 538c7fd, e2f3990, … +11]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 36 [ADDED=15, MODIFIED=20, REMOVED=1; +3500/-658]. Sample: ADDED `docs/superpowers/plans/2026-06-10-raw-path-to-minio-migration.md` +1592/-0; ADDED `docs/superpowers/specs/2026-06-10-raw-path-to-minio-migration-design.md` +208/-0; MODIFIED `module-cleanup/src/main/kotlin/maple/cleanup/controller/CleanupController.kt` +12/-11. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1229 — fix(ext-api): repair 5 post-merge test fixtures + RankingFetch race
 - author zbnerd; closed; created 2026-06-10T13:55:40Z; closed 2026-06-10T14:19:17Z; merged yes/2026-06-10T14:19:17Z; merge commit 7f5fdee6b0c523398b980c4aed39c06dbcab4027. Body: ## Summary Two followups from PR #1228 (raw path → MinIO migration): 1. **5 pre-existing test files** had compile errors after the…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1229.
+- commits: 1 [1c54202]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [MODIFIED=9; +74/-44]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriter.kt` +1/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` +15/-10; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriterTest.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1230 — fix(ext-api): complete raw-path-to-minio migration audit fixes
 - author zbnerd; closed; created 2026-06-11T00:45:12Z; closed 2026-06-11T00:46:10Z; merged yes/2026-06-11T00:46:10Z; merge commit caad957811c47ed1854669dadb37cafbdb2b4355. Body: Post-merge audit of PR #1228 (raw-path-to-minio migration). Found 21 issues across 4 modules; this PR addresses the actionable one…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1230.
+- commits: 1 [e554d03]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [MODIFIED=12, REMOVED=1; +86/-118]. Sample: MODIFIED `docs/superpowers/specs/2026-06-10-raw-path-to-minio-migration-design.md` +2/-2; MODIFIED `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` +4/-3; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriter.kt` +6/-5. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1231 — fix(ext-api): re-enable character-basic and item-equipment phases
 - author zbnerd; closed; created 2026-06-11T03:58:40Z; closed 2026-06-11T06:39:29Z; merged yes/2026-06-11T06:39:29Z; merge commit 350d79f01e536a9de0892ce865cd5c93eea2bc5a. Body: Issue #1217 left the char-basic + item-equipment phases disabled in `ExternalApiScheduler.triggerDailyRefresh` with a TODO marker.…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1231.
+- commits: 1 [7cf14ae]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +28/-47]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +20/-47; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerTest.kt` +8/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1232 — fix(ext-api): OcidCacheProvider reads JSONL instead of splitting on tab
 - author zbnerd; closed; created 2026-06-11T05:13:09Z; closed 2026-06-11T06:39:48Z; merged yes/2026-06-11T06:39:48Z; merge commit 5460b05ca7e6f00ee703ae5b4195d8801a7c88b6. Body: The reader split each line on "\t" and required parts.size >= 2 to accept an entry. OcidLookupPhase writes JSON lines ({"userIgn":…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1232.
+- commits: 3 [7cf14ae, 5ce1002, 56b1ee9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [MODIFIED=4; +123/-58]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` +40/-5; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +20/-47; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/cache/OcidCacheProviderTest.kt` +55/-6. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1233 — fix(calc+sync): decode bodyBytes when chunk records have no inline body
 - author zbnerd; closed; created 2026-06-11T07:28:26Z; closed 2026-06-11T07:30:07Z; merged yes/2026-06-11T07:30:07Z; merge commit 254441e6588a1e81a992ba328c323824e5612947. Body: Ext-api writers (BatchFetchSupport) emit SnapshotChunkRecord.Success with the response payload as a base64-encoded ByteArray field…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1233.
+- commits: 5 [7cf14ae, 5ce1002, 56b1ee9, b99e2dc, 1547df8]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +191/-63]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/processor/SnapshotChunkProcessor.kt` +32/-2; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` +40/-5; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +20/-47. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1234 — fix(ext-api): stream OCID mapping writes to MinIO instead of buffering
 - author zbnerd; closed; created 2026-06-11T09:10:43Z; closed 2026-06-11T09:11:28Z; merged yes/2026-06-11T09:11:28Z; merge commit 4fa308f191a28c95def6c7f42e439a7cb4ff178a. Body: The previous implementation accumulated every successful mapping (`{"userIgn":"...","ocid":"..."}` JSON, ~200B) in a single `resul…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1234.
+- commits: 1 [c74cdfd]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +96/-53]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` +73/-41; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` +23/-12. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1235 — fix(ext-api): catch Throwable in sink writer loop so OOM/Error surfaces
 - author zbnerd; closed; created 2026-06-11T13:26:05Z; closed 2026-06-11T15:00:33Z; merged yes/2026-06-11T15:00:33Z; merge commit 445044c0c1fe31560611bdac0f0db3985f0c8a0e. Body: ChunkedSnapshotSink.runWriterLoop had `catch (ex: Exception)`. When the writer thread threw an `Error` (most commonly `OutOfMemory…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1235.
+- commits: 1 [d0747c1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +123/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` +8/-1; ADDED `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSinkTest.kt` +115/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1241 — chore: record module-app + module-web deletion plan
 - author zbnerd; closed; created 2026-06-11T15:39:03Z; closed 2026-06-11T15:44:56Z; merged yes/2026-06-11T15:44:56Z; merge commit 74725906005ce5a1c46dec96ae6ebcdb3c3c98cb. Body: 이슈 트래커 + 이 PR이 module-app/module-web 삭제 작업의 단일 소스. 이슈 5개로 분할됨 (의존성 순): - #1236 — infra: dead V4 service dedup + TraceAspect 제거 (병행…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1241.
+- commits: 1 [bde4b2d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 0 [none; +0/-0]. Sample: none. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1242 — fix(ext-api): track item-equipment completion in run-status via CHARACTER_BASIC_DONE
 - author zbnerd; closed; created 2026-06-12T00:38:39Z; closed 2026-06-12T00:38:49Z; merged yes/2026-06-12T00:38:49Z; merge commit acd09e1e70572c7ed1f071c378e7a15df44f135d. Body: ## Summary - Add `PipelinePhase.CHARACTER_BASIC_DONE` as intermediate (non-terminal) state - `ExternalApiScheduler` transitions to…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1242.
+- commits: 1 [98517fe]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +124/-19]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/PipelinePhase.kt` +1/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +8/-8; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ItemEquipmentContinuousLoop.kt` +26/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1278 — fix(ext-api): two startRun + OOM fixes
 - author zbnerd; closed; created 2026-06-12T05:42:00Z; closed 2026-06-12T06:02:17Z; merged yes/2026-06-12T06:02:17Z; merge commit 2e3fd56796dd37f2b889b98f5c08b3d61bc2d114. Body: ## Summary Two fixes on the same branch. ### Fix 1: Writer-thread OOM - `GzipJsonlChunkWriter` buffered each chunk in a `ByteArray…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1278.
+- commits: 2 [4a38044, eafb905]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [MODIFIED=13; +296/-54]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +16/-6; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ItemEquipmentContinuousLoop.kt` +12/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhase.kt` +1/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1279 — fix(ext-api): backport OOM + startRun fixes to release-0.6.12
 - author zbnerd; closed; created 2026-06-12T06:06:33Z; closed 2026-06-12T06:27:49Z; merged yes/2026-06-12T06:27:49Z; merge commit ec3dd6fe47b850cfb20e284ee52736c6b433733a. Body: ## Summary Cherry-pick of the two fix commits from PR #1278 onto the release branch. - **810b3ca41** — `fix(ext-api): stream gzipp…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1279.
+- commits: 2 [810b3ca, fe8a60c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [MODIFIED=13; +296/-54]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +16/-6; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ItemEquipmentContinuousLoop.kt` +12/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhase.kt` +1/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1280 — fix(storage): add putFile to skip double-spool in writer hot path
 - author zbnerd; closed; created 2026-06-12T10:00:48Z; closed 2026-06-12T10:01:32Z; merged yes/2026-06-12T10:01:32Z; merge commit 47da4ffa78fb782816a039e2be5243645a01b237. Body: ## Summary The OOM fix in #1278 moved chunk upload from `ObjectStorage.put(byte[])` to `ObjectStorage.putStream(InputStream)`. The…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1280.
+- commits: 1 [3dbc18c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [MODIFIED=9; +117/-57]. Sample: MODIFIED `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` +13/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriter.kt` +26/-16; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriterTest.kt` +6/-8. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1281 — fix(ext-api): set ITEM_EQUIPMENT phase + don't overwrite daily runId
 - author zbnerd; closed; created 2026-06-13T06:12:00Z; closed 2026-06-13T06:19:27Z; merged yes/2026-06-13T06:19:27Z; merge commit e27600f4b6e8b4ac2514449a6211a7a8feab5cb4. Body: ## Summary Two related fixes on the same branch — both stem from PR #1278, which added `startRun` to the item-equipment continuous…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1281.
+- commits: 2 [cbff899, 7a38411]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +80/-7]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/RunStatusTracker.kt` +22/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ItemEquipmentContinuousLoop.kt` +23/-7; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/runstatus/RunStatusTrackerTest.kt` +35/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1282 — fix(airflow): bump daily_collection_pipeline task timeouts to fit pipeline runtime
 - author zbnerd; closed; created 2026-06-13T09:24:38Z; closed 2026-06-13T12:32:35Z; merged yes/2026-06-13T12:32:35Z; merge commit 4bb853e05b5e5fe71cd0dc1967c214b934bc1bc4. Body: ## Summary - `wait_for_completion` execution_timeout: **2h → 4h** - `wait_ie_cycle` execution_timeout: **1h → 2h** The full daily …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1282.
+- commits: 6 [810b3ca, fe8a60c, ec3dd6f, 8337490, 051762b, 3043ba8]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=2, MODIFIED=1; +743/-2]. Sample: MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +10/-2; ADDED `docs/superpowers/plans/2026-06-12-architecture-review.md` +534/-0; ADDED `docs/superpowers/specs/2026-06-12-architecture-review-design.md` +199/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1283 — perf(ext-api): fire-and-forget chunk uploads via S3TransferManager
 - author zbnerd; closed; created 2026-06-13T14:48:58Z; closed 2026-06-13T14:53:56Z; merged yes/2026-06-13T14:53:56Z; merge commit 89b26ce2b70efa4d007af5715804c935b0e0cd30. Body: ## Summary The writer thread previously blocked 5-10s per 128MB chunk on a synchronous `s3.putObject` call. With ~50 files/s for i…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1283.
+- commits: 1 [94cdd56]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 15 [MODIFIED=15; +288/-37]. Sample: MODIFIED `gradle/libs.versions.toml` +1/-0; MODIFIED `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` +21/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` +55/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1284 — fix(airflow): trigger task — PythonOperator over HttpOperator
 - author zbnerd; closed; created 2026-06-14T07:13:20Z; closed 2026-06-14T08:10:46Z; merged yes/2026-06-14T08:10:46Z; merge commit 38c3ecd2982c55759f44adb42fa4c65bf76c6b6e. Body: ## Problem `daily_collection_pipeline.trigger_daily_collection` failed on every scheduled run since 2026-06-12 (3 consecutive fail…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1284.
+- commits: 3 [742cd97, 9734a19, 05e0939]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +263/-50]. Sample: MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +126/-50; ADDED `docs/01_ADR/ADR-726-airflow-trigger-task-design.md` +137/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1285 — fix(infra): paginate MinioObjectStorage.listByPrefix
 - author zbnerd; closed; created 2026-06-14T08:09:09Z; closed 2026-06-14T08:10:49Z; merged yes/2026-06-14T08:10:49Z; merge commit 935a88717b9254f9ab4bf8843f86d2d502085a18. Body: ## Problem `module-cleanup` returned `runsDeleted: 0` despite the bucket holding 70+ old runs that exceeded the retention window. …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1285.
+- commits: 4 [742cd97, 9734a19, 05e0939, 4002eff]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +290/-59]. Sample: MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +126/-50; ADDED `docs/01_ADR/ADR-726-airflow-trigger-task-design.md` +137/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt` +27/-9. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1286 — feat(calculator,cleanup): stale runId filter + stale-kafka scan endpoint
 - author zbnerd; closed; created 2026-06-14T13:46:27Z; closed 2026-06-14T13:46:40Z; merged yes/2026-06-14T13:46:40Z; merge commit 7689a7211426d444d1202c94df4be0aeb6e2fa02. Body: ## Summary - **Calculator**: Polls ext-api's `/api/internal/run-status` every 30s to discover the active runId, and drops chunk-re…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1286.
+- commits: 1 [10e7855]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=4, MODIFIED=8; +432/-2]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +30/-1; ADDED `docs/01_ADR/ADR-727_stale-kafka-run-handling.md` +112/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` +2/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1287 — chore(release): merge release-0.6.12 into master
 - author zbnerd; closed; created 2026-06-14T16:06:28Z; closed 2026-06-14T16:06:51Z; merged yes/2026-06-14T16:06:51Z; merge commit 7ba2375187bf6549223eef9ea9219d217a75f427. Body: ## Summary Promotes `release-0.6.12` to `master`. This is a release-candidate promotion: `release-0.6.12` has been the live branch…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1287.
+- commits: 167 [27543e0, 9c02068, 763e973, 22f1ffa, ac20c46, 13669fa, 65ca23c, a6a07c6, … +159]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 181 [ADDED=75, MODIFIED=93, REMOVED=13; +20131/-2826]. Sample: ADDED `.claude/skills/pipeline-test/SKILL.md` +509/-0; MODIFIED `.env.example` +15/-0; MODIFIED `.gitignore` +2/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1288 — feat(minio): 4 SA prefix-policy isolation + ephemeral CI
 - author zbnerd; closed; created 2026-06-15T01:29:53Z; closed 2026-06-15T02:43:27Z; merged yes/2026-06-15T02:43:27Z; merge commit f09fc9d0352ee0542ae1ab455784f0cdefdefff2. Body: ## Summary - Replace shared `minioadmin` root credential with 4 prefix-scoped service accounts. - Single bucket `maple-expectation…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1288.
+- commits: 27 [6550449, 029aeeb, 0d6e07c, b4b9b71, 8028c6f, 781c55e, 2b11f93, 31451a0, … +19]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 24 [ADDED=19, MODIFIED=4, RENAMED=1; +2894/-42]. Sample: ADDED `.env.bootstrap.template` +11/-0; ADDED `.env.calculator.template` +4/-0; ADDED `.env.cleanup.template` +4/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1293 — chore(ext-api): bump heap -Xmx1g to -Xmx2g
 - author zbnerd; closed; created 2026-06-16T08:05:12Z; closed 2026-06-16T08:05:36Z; merged yes/2026-06-16T08:05:36Z; merge commit 9cf1195a83f051033b8140cebd3ddd4f4335eb9c. Body: ## Summary - `scripts/systemd/maple-external-api.service`: ExecStart `-Xmx1g` → `-Xmx2g` - `.claude/skills/pipeline-test/SKILL.md`…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1293.
+- commits: 8 [b8626f0, 2976c17, f416b8a, d4986f7, cc7c0de, 6a081b1, 2e779d0, a76ff88]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 14 [ADDED=5, MODIFIED=9; +340/-92]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +70/-35; MODIFIED `.gitignore` +4/-1; MODIFIED `docker-compose.airflow.yml` +36/-27. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1294 — fix(race+throughput): close 3 throughput-limiting gaps
 - author zbnerd; closed; created 2026-06-16T08:07:51Z; closed 2026-06-16T08:08:15Z; merged yes/2026-06-16T08:08:15Z; merge commit b8d2fb9d94ab6971dfd131bdc862ab8bdd8267c6. Body: ## Summary 3 independent fixes that together restore item-equipment throughput to 150 files/s (from 102). All verified end-to-end …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1294.
+- commits: 1 [ecee745]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +309/-41]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +54/-19; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/config/PipelineProperties.kt` +7/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/runstate/CalculatorCurrentRunIdHolder.kt` +45/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1295 — chore(release): merge release-0.6.16 into master
 - author zbnerd; closed; created 2026-06-16T08:13:59Z; closed 2026-06-16T08:14:20Z; merged yes/2026-06-16T08:14:20Z; merge commit 46e6f0d1f12690dec49b4f22daa3501bea0abb3c. Body: ## Summary - release-0.6.16 cut from develop - Includes all develop commits since release-0.6.12 - Throughput improvements verifie…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1295.
+- commits: 13 [f09fc9d, b8626f0, 2976c17, f416b8a, d4986f7, cc7c0de, 6a081b1, 2e779d0, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 42 [ADDED=24, MODIFIED=17, RENAMED=1; +3541/-173]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +70/-35; ADDED `.env.bootstrap.template` +11/-0; ADDED `.env.calculator.template` +4/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1297 — hotfix(airflow): fix cleanup DAG connection + add ensure script
 - author zbnerd; closed; created 2026-06-17T04:13:11Z; closed 2026-06-17T04:13:23Z; merged yes/2026-06-17T04:13:23Z; merge commit 29c275f1f6560e963e0e7b3c8345366c0e7d94e3. Body: ## Summary Fix `daily_cleanup_pipeline` DAG that has been failing for 6+ cycles (since 2026-06-15 12:00 UTC) because: 1. The `clea…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1297.
+- commits: 1 [4b5944b]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +84/-2]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +16/-2; ADDED `scripts/airflow-ensure-connections.sh` +68/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1298 — fix(compose): override MINIO_ENDPOINT for in-container minio-bootstrap
 - author zbnerd; closed; created 2026-06-17T06:52:11Z; closed 2026-06-17T07:35:00Z; merged yes/2026-06-17T07:35:00Z; merge commit afbb7da4e60e4e37f35ba8a1f52e76c18f92320b. Body: ## Summary Add `environment.MINIO_ENDPOINT=http://minio:9000` to `minio-bootstrap` service in docker-compose.yml. The `.env.bootst…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1298.
+- commits: 4 [e0b9a2a, a260709, 998c0bf, 939121a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [MODIFIED=4; +7/-3]. Sample: MODIFIED `docker-compose.yml` +4/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/config/NexonHttpClientProperties.kt` +1/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerRateLimiter.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1299 — feat(ext-api): per-phase HTTP trigger endpoint (#1289)
 - author zbnerd; closed; created 2026-06-18T05:04:49Z; closed 2026-06-18T05:05:19Z; merged yes/2026-06-18T05:05:19Z; merge commit 40156cfa74c51a61db412ed4bc60ca6ebcd1700c. Body: ## Summary Closes #1289 — adds `POST /api/internal/trigger/phase/{phaseName}` for standalone per-phase runs. Operators can now re-…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1299.
+- commits: 20 [c86c21b, 521f6db, cc4bab5, 23d82dc, 29b740a, db242d8, ca05801, 83479ad, … +12]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 22 [ADDED=3, MODIFIED=18, REMOVED=1; +3436/-494]. Sample: ADDED `docs/superpowers/plans/2026-06-18-issue-1289-phase-trigger-endpoint.md` +1750/-0; ADDED `docs/superpowers/specs/2026-06-18-issue-1289-phase-trigger-endpoint-design.md` +193/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1300 — feat(ext-api): phase stop endpoint (#1290)
 - author zbnerd; closed; created 2026-06-18T06:54:52Z; closed 2026-06-18T07:19:14Z; merged yes/2026-06-18T07:19:14Z; merge commit a8653e0c7446e09a7504cc20443c2837d7f709e9. Body: ## Summary - Adds `POST /api/internal/stop/phase/{phaseName}` to gracefully halt an in-flight ext-api phase at its chunk/page boun…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1300.
+- commits: 21 [28ab2dc, ee9bde8, fa3a88f, f4aa2e9, 05b44ec, 525dbd4, 314c6be, 2221e23, … +13]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 25 [ADDED=9, MODIFIED=16; +2825/-38]. Sample: ADDED `docs/superpowers/plans/2026-06-18-issue-1290-phase-stop-endpoint.md` +1541/-0; ADDED `docs/superpowers/specs/2026-06-18-issue-1290-phase-stop-endpoint-design.md` +306/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiController.kt` +34/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1301 — sync to dev
 - author zbnerd; closed; created 2026-06-18T07:20:51Z; closed 2026-06-18T07:21:07Z; merged yes/2026-06-18T07:21:07Z; merge commit fd7d4caecb34bf2b60c18d07f55e25272f1b2eb4. Body: sync to dev
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1301.
+- commits: 4 [a260709, 998c0bf, 939121a, afbb7da]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [MODIFIED=4; +7/-3]. Sample: MODIFIED `docker-compose.yml` +4/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/config/NexonHttpClientProperties.kt` +1/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerRateLimiter.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1302 — feat(ext-api): phase infinite-loop endpoint (issue #1291)
 - author zbnerd; closed; created 2026-06-18T08:47:40Z; closed 2026-06-18T08:47:51Z; merged yes/2026-06-18T08:47:51Z; merge commit bad931560d53ac93f45ed6515f2ec6e67768c1b9. Body: ## Summary - Add `POST /api/internal/loop/phase/{phaseName}` and `POST /api/internal/stop/loop/phase/{phaseName}` to `module-exter…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1302.
+- commits: 15 [39f636b, d4b9de4, bcf1cb0, 629eddb, cce00fd, 9bdfe34, 03fb7cf, b90a0c4, … +7]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 20 [ADDED=9, MODIFIED=11; +3447/-40]. Sample: ADDED `docs/superpowers/plans/2026-06-19-issue-1291-loop-endpoint.md` +1906/-0; ADDED `docs/superpowers/specs/2026-06-19-issue-1291-loop-endpoint-design.md` +457/-0; ADDED `module-external-api/src/main/kotlin/maple/externalapi/loop/LoopExecutorConfig.kt` +50/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1303 — feat(airflow): per-phase scope-driven branch in daily DAG (#1292)
 - author zbnerd; closed; created 2026-06-18T10:08:06Z; closed 2026-06-18T10:12:00Z; merged yes/2026-06-18T10:12:00Z; merge commit fd5348e79f9a984523ecba21789be3b4cf515b5d. Body: ## Summary Extends `daily_collection_pipeline.py` with a `scope`-driven branch (`branch_on_scope`) so operators can trigger / loop…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 2 reviews [COMMENTED=2]; 5 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1303.
+- commits: 17 [b1f02f2, 41d3288, 1ee9a00, 65ade80, dea85b9, d1af370, f598d91, 16c1101, … +9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [ADDED=7, MODIFIED=2; +2925/-2]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +134/-0; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +53/-2; ADDED `docker/airflow/dags/per_phase_tasks.py` +254/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1304 — feat(infra): Lock *Async API — pure CF chain, no task.get()
 - author zbnerd; closed; created 2026-06-18T12:53:28Z; closed 2026-06-19T04:16:37Z; merged yes/2026-06-19T04:16:37Z; merge commit 59ae20f8dbc373c5b537d74cf9adde1eb3e62f16. Body: ## Summary Adds async-returning methods to the Lock port. Eliminates all 5 `task.get()` blocking sites in `PostgresAdvisoryLockStr…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1304.
+- commits: 18 [97461e1, d51b50d, 3b45569, a2ec8ff, 1f8b1cd, 5cb1d11, 776db9a, f9e5166, … +10]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 19 [ADDED=4, MODIFIED=15; +1523/-214]. Sample: ADDED `docs/05_Reports/2026-06-18-blocking-audit.md` +147/-0; MODIFIED `module-app/src/test/java/maple/expectation/monitoring/MonitoringAlertServiceUnitTest.java` +14/-6; MODIFIED `module-app/src/test/java/maple/expectation/scheduler/PopularCharacterWarmupSchedulerTest.java` +47/-58. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1305 — feat(infra): PGMQ workers — processAsync CF<ProcessOutcome>, no .join
 - author zbnerd; closed; created 2026-06-18T14:37:58Z; closed 2026-06-18T21:18:15Z; merged yes/2026-06-18T21:18:14Z; merge commit e0f156c42c33b12633321006e59bfc6035892112. Body: ## Summary Adds async-returning `processAsync(): CF<ProcessOutcome>` to PGMQ workers. Eliminates 8 blocking sites (`.join()` × 4, …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1305.
+- commits: 13 [97461e1, d7cafa2, ad7a24e, 3091195, a449408, e49e0c8, 63123ee, bde2da5, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 20 [ADDED=12, MODIFIED=8; +2079/-189]. Sample: ADDED `docs/05_Reports/2026-06-18-blocking-audit.md` +147/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/PgmqWorker.kt` +69/-41; ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/ProcessOutcome.kt` +38/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1306 — feat(ext-api): InternalApiController — drop .join(), true fire-and-forget
 - author zbnerd; closed; created 2026-06-18T22:07:42Z; closed 2026-06-18T22:08:12Z; merged yes/2026-06-18T22:08:12Z; merge commit f82bd83088a42870f6a57c1726abe73cb815197e. Body: ## Summary Removes \`.join()\` from \`InternalApiController\` trigger endpoints (lines 83, 123) so the controller returns 202 imme…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1306.
+- commits: 2 [4413af3, 54924b9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +200/-2]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiController.kt` +2/-2; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/runstatus/InternalApiControllerTest.kt` +122/-0; ADDED `module-external-api/src/test/kotlin/maple/externalapi/test/ExtApiBlockingPrimitiveGateTest.kt` +76/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1307 — feat(ext-api): ChunkFileManager/Sink closeAsync — no all.get(10min)
 - author zbnerd; closed; created 2026-06-19T03:26:06Z; closed 2026-06-19T03:26:28Z; merged yes/2026-06-19T03:26:28Z; merge commit 5e5a1f2f1b9807f17ceda2f068befbc8ad5c79d2. Body: ## Summary Converts the 10-minute hard blocking `all.get(600_000L, TimeUnit.MILLISECONDS)` in `ChunkFileManager.awaitAllUploads` t…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1307.
+- commits: 2 [b259918, a801ba6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=1, MODIFIED=6; +281/-34]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhase.kt` +13/-15; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhase.kt` +13/-15; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1308 — feat(sync): BackpressureLimiter cancel-safety + runBlocking cleanup in consumer/ranking
 - author zbnerd; closed; created 2026-06-19T04:06:25Z; closed 2026-06-19T04:06:42Z; merged yes/2026-06-19T04:06:42Z; merge commit a04c864578102ab1d42b576e3bbe2d0b14744433. Body: ## Summary Eliminates the remaining 5 blocking primitive sites from the audit: 1. `UrgentCharacterRequestConsumer` permit-leak ris…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 3 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1308.
+- commits: 2 [8b56bdc, 2edf07d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=1, MODIFIED=4; +136/-27]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/urgent/UrgentCharacterRequestConsumer.kt` +8/-1; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/test/ExtApiBlockingPrimitiveGateTest.kt` +3/-2; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` +12/-13. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1309 — feat(ext-api): OrphanTempFileCleanupHook — boot sweep of orphan gzip-chunk-*.tmp (#1296)
 - author zbnerd; closed; created 2026-06-19T05:09:51Z; closed 2026-06-19T05:51:35Z; merged yes/2026-06-19T05:51:35Z; merge commit 74a65d50a571280eb6b4433bd79a5df6895db01e. Body: ## Summary - Adds `OrphanTempFileCleanupHook` (Spring `ApplicationRunner`) that deletes orphan `gzip-chunk-*.tmp` files older than…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1309.
+- commits: 7 [c8f786c, 515f996, 9f5cad7, a38e6a3, d47a35f, 55e4677, 66f16f9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=4; +1266/-0]. Sample: ADDED `docs/superpowers/plans/2026-06-19-ext-api-orphan-tmp-cleanup.md` +641/-0; ADDED `docs/superpowers/specs/2026-06-19-ext-api-orphan-tmp-cleanup-design.md` +320/-0; ADDED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/OrphanTempFileCleanupHook.kt` +113/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1315 — perf(pipeline): cap direct buffer memory at 512MB
 - author zbnerd; closed; created 2026-06-19T15:36:43Z; closed 2026-06-19T15:37:13Z; merged yes/2026-06-19T15:37:13Z; merge commit aed47f55b24fa1cc4e2de0126ec16ed318e93c49. Body: ## Summary - Cap JVM direct buffer memory at 512MB on `module-external-api` and `module-calculator` via `-XX:MaxDirectMemorySize=5…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1315.
+- commits: 4 [650cf79, f16a4c2, 522ef07, 6cadc2d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=3, MODIFIED=2; +1570/-0]. Sample: ADDED `docker/prometheus/rules/offheap-alerts.yml` +18/-0; ADDED `docs/superpowers/plans/2026-06-19-offheap-streaming.md` +1212/-0; ADDED `docs/superpowers/specs/2026-06-19-offheap-streaming-design.md` +322/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1316 — perf(pipeline): tune Netty/Kafka direct buffer pools (issue #1314)
 - author zbnerd; closed; created 2026-06-19T16:35:03Z; closed 2026-06-19T16:35:14Z; merged yes/2026-06-19T16:35:14Z; merge commit 7adbe50aafa93c12209fa60ae10e859666e33303. Body: ## Summary Phase 5 of the off-heap streaming plan. Config-only tuning to fit within the 512MB direct memory cap from Phase 1 (#131…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1316.
+- commits: 9 [cca3dfb, 28dca3e, 266ba6c, 9530e49, 5a8119d, 5737218, d595548, 9cab09d, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=2, MODIFIED=8; +581/-2]. Sample: MODIFIED `build.gradle` +3/-1; ADDED `docs/superpowers/plans/2026-06-19-issue-1314-direct-buffer-tuning.md` +285/-0; MODIFIED `docs/superpowers/plans/2026-06-19-offheap-streaming.md` +9/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1317 — perf(ext-api): streaming JSONL parser for chunk payloads (#1313)
 - author zbnerd; closed; created 2026-06-19T17:17:06Z; closed 2026-06-19T17:23:39Z; merged yes/2026-06-19T17:23:39Z; merge commit 69690f51c6bac7937427ed791e30e7219316be72. Body: Resolves #1313. Replaces per-line `objectMapper.readTree(line)` with a shared line-bounded `StreamingChunkParser` (Jackson + `Buff…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1317.
+- commits: 21 [5545a89, 35fdaba, fb922b9, c796695, d373f80, 8189aae, 57cffc2, 1ac566e, … +13]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 21 [ADDED=12, MODIFIED=9; +5811/-121]. Sample: ADDED `docs/superpowers/plans/2026-06-19-issue-1312-streaming-writer-cf-chain.md` +1381/-0; ADDED `docs/superpowers/plans/2026-06-19-issue-1313-streaming-chunk-parser.md` +1234/-0; ADDED `docs/superpowers/plans/2026-06-19-offheap-calculator-cache.md` +1692/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1318 — feat(calculator): streaming gzip -> S3 via CF chain (issue #1312)
 - author zbnerd; closed; created 2026-06-19T17:35:48Z; closed 2026-06-19T17:40:06Z; merged yes/2026-06-19T17:40:06Z; merge commit 85b5528df557377675b080edfe7d6515c9993461. Body: ## Summary Replace the legacy ByteArrayOutputStream buffering in CalculationResultWriter with a CF chain (Flow -> gzip -> 8MB pipe…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1318.
+- commits: 32 [9f73189, 83e060a, a4f912d, 8f8deca, 8e2f533, f7c1ddd, d0a234a, d055377, … +24]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 22 [ADDED=7, MODIFIED=15; +662/-169]. Sample: MODIFIED `docs/superpowers/plans/2026-06-19-offheap-calculator-cache.md` +40/-82; MODIFIED `docs/superpowers/specs/2026-06-19-issue-1313-streaming-chunk-parser-design.md` +0/-9; MODIFIED `docs/superpowers/specs/2026-06-19-offheap-calculator-cache-design.md` +2/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1319 — perf(calculator): off-heap OCID cache via OffHeapSerializedBackend (#1311)
 - author zbnerd; closed; created 2026-06-19T17:37:14Z; closed 2026-06-19T17:41:40Z; merged yes/2026-06-19T17:41:40Z; merge commit c0a163928a47a3fdecec16413bc925d1233825bf. Body: ## Summary Replaces heap-resident Caffeine OCID lookup cache with off-heap-backed storage. Achieves issue #1311's primary AC of re…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 2 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1319.
+- commits: 28 [688067a, e16e8be, 594f427, 8de1564, 15f9981, 2642ee1, 0be5227, 68d2190, … +20]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 25 [ADDED=11, MODIFIED=14; +709/-101]. Sample: MODIFIED `build.gradle` +1/-3; ADDED `docker/prometheus/rules/cache-backend-alerts.yml` +18/-0; MODIFIED `docs/superpowers/plans/2026-06-19-offheap-calculator-cache.md` +7/-7. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1320 — refactor(ext-api): OcidLookupPhase putStream -> putStreamMultipart (issue #1319)
 - author zbnerd; closed; created 2026-06-19T17:52:42Z; closed 2026-06-19T17:52:50Z; merged yes/2026-06-19T17:52:50Z; merge commit 4c8af3a7ad585cea68614324ff9fbc7e00871aba. Body: ## Summary Migrate OcidLookupPhase to the CF-based putStreamMultipart API. Eliminates the heap-draining readBytes() path inside pu…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1320.
+- commits: 1 [b53a396]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +42/-19]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` +27/-10; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` +15/-9. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1321 — perf(ext-api): producer-side serialize + OCID read-through (ADR-729)
 - author zbnerd; closed; created 2026-06-20T05:33:59Z; closed 2026-06-20T07:28:43Z; merged yes/2026-06-20T07:28:43Z; merge commit 474c59d9685f77322583a16cd54280e95036f5bb. Body: ## Summary ITEM_EQUIPMENT loop throughput gap (~98 vs reference 150-160 files/s) addressed with two independent moves. See ADR-729…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1321.
+- commits: 4 [b53a396, b733a8d, c7b20f4, 303eab5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=1, MODIFIED=10; +352/-54]. Sample: ADDED `docs/01_ADR/ADR-729-ext-api-item-equipment-loop-throughput.md` +104/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` +12/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchFetchSupport.kt` +24/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1322 — fix(ext-api): ITEM_EQUIPMENT uses OCID_LOOKUP runId, not CHARACTER_BASIC
 - author zbnerd; closed; created 2026-06-21T05:17:21Z; closed 2026-06-21T05:17:46Z; merged yes/2026-06-21T05:17:46Z; merge commit d34533546403286bd6fd8c57e60d5fb59d8d5b48. Body: ## Summary - `ExternalApiScheduler` chained `ITEM_EQUIPMENT` after `CHARACTER_BASIC` but passed `cbRunId` as upstream runId. `Ocid…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1322.
+- commits: 1 [e4dc0dc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +6/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +6/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1323 — fix(ci): ci.yml context + tests + minio-it container workflow
 - author zbnerd; closed; created 2026-06-21T05:22:21Z; closed 2026-06-21T07:19:35Z; merged yes/2026-06-21T07:19:35Z; merge commit 2f1a063ea013b25f6ae4bb4c5d5b1d27a5e0b36e. Body: ## Summary Restores CI green from a 9-day regression on every PR/develop run. ## Fix 1 — \`ci.yml\` job-level env context error \`…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1323.
+- commits: 11 [8d86a54, 5a41003, 869f57d, 0110f74, c512beb, be21f6b, e48ccf3, 79363bd, … +3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +85/-59]. Sample: MODIFIED `.github/workflows/ci.yml` +53/-33; MODIFIED `module-cleanup/src/test/kotlin/maple/cleanup/controller/CleanupControllerTest.kt` +7/-0; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` +25/-26. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1324 — feat(services): containerize 4 Spring Boot services + Airflow DNS switch
 - author zbnerd; closed; created 2026-06-22T02:54:28Z; closed 2026-06-22T03:48:55Z; merged yes/2026-06-22T03:48:55Z; merge commit 556017399c468a033a55274857d1aedaeb6b8765. Body: ## Summary - **entrypoint wrapper** reads \`MINIO_SECRET_KEY_FILE\` (Docker secret file mount at \`/run/secrets/sa-<module>\`) and…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1324.
+- commits: 14 [f4b3fc6, 71bb1c1, ffcf4a8, d947cd8, bb1e84a, f20eb72, 86145a0, 9dabbfa, … +6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 26 [ADDED=3, MODIFIED=18, REMOVED=5; +574/-115]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +67/-30; REMOVED `.env.bootstrap.template` +0/-11; REMOVED `.env.calculator.template` +0/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1325 — fix(calculator): drain result writer to temp file (empty result-part files)
 - author zbnerd; closed; created 2026-06-22T05:25:51Z; closed 2026-06-22T05:37:57Z; merged yes/2026-06-22T05:37:57Z; merge commit 205ce14b814b98cf1533a8072d1393dca9cfd310. Body: ## Summary - `CalculationResultWriter` produced **0-row (empty)** `result-part-*.jsonl.gz` on every item-equipment chunk → synchro…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1325.
+- commits: 1 [7f74801]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=1, MODIFIED=3; +178/-74]. Sample: ADDED `docs/01_ADR/ADR-730_calculator-writer-temp-file-upload.md` +97/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` +68/-64; MODIFIED `module-calculator/src/test/kotlin/maple/calculator/writer/CalculationResultWriterTest.kt` +1/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1326 — feat(coolify): self-healing design + Phase 1 (infra under Coolify + autoheal)
 - author zbnerd; closed; created 2026-06-22T06:46:18Z; closed 2026-06-22T06:59:38Z; merged yes/2026-06-22T06:59:38Z; merge commit 991a3fa51cb7ebd0628b1bd84d3e098bc8d4959d. Body: ## Summary Brings the infra stack under Coolify as a self-healing Docker Compose resource and closes the soft-failure self-healing…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1326.
+- commits: 9 [939dcc4, a10f000, 12e8832, 3f7fff0, 27228cf, ae44d59, 33af3c5, 510a002, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=5, MODIFIED=2; +2373/-4]. Sample: MODIFIED `.github/workflows/ci.yml` +9/-0; MODIFIED `docker-compose.yml` +83/-4; ADDED `docs/01_ADR/ADR-731_coolify-self-healing-infra.md` +87/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1327 — feat(coolify): Phase 2 — apps under Coolify + CI->GHCR image pipeline
 - author zbnerd; closed; created 2026-06-22T07:15:24Z; closed 2026-06-22T07:29:06Z; merged yes/2026-06-22T07:29:06Z; merge commit 2d20987c25ab094bb01ecb2096aed1eea3b06d96. Body: ## Summary Brings the 4 Spring Boot services under Coolify with the same 3-layer self-healing as the infra layer, and establishes …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1327.
+- commits: 5 [38bd6db, 04fd62b, 505557b, 0c21556, bac9c5f]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=1, MODIFIED=4; +198/-15]. Sample: MODIFIED `.github/workflows/ci.yml` +50/-0; MODIFIED `docker-compose.services.yml` +40/-8; MODIFIED `docker-compose.yml` +11/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #1328 — feat(coolify): Phase 3 — cAdvisor restart alert + promtail docker_sd + ops guide
 - author zbnerd; closed; created 2026-06-22T07:36:51Z; closed 2026-06-22T07:51:48Z; merged yes/2026-06-22T07:51:48Z; merge commit 238d40fa7a21c39675ab31bd4ade77ee35b5aa4b. Body: ## Summary Closes out the Coolify self-healing rollout — observability (cAdvisor restart alert + opt-in container stdout via promt…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1328.
+- commits: 4 [b3ce359, b874c54, 1221abc, a9f3ece]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 6 [ADDED=2, MODIFIED=4; +247/-1]. Sample: MODIFIED `docker-compose.yml` +28/-0; MODIFIED `docker/prometheus/prometheus.yml` +13/-0; MODIFIED `docker/prometheus/rules/alert_rules.yml` +16/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1329 — feat(airflow): phase-separated DAGs (5 single-purpose DAGs)
 - author zbnerd; closed; created 2026-06-22T13:43:46Z; closed 2026-06-22T13:43:57Z; merged yes/2026-06-22T13:43:57Z; merge commit a46ba59e4294f04c4a6359626b01b4e20f517330. Body: ## Summary Replace `daily_collection_pipeline` (one DAG, 3 workflow intents via JSON `scope`/`steps`) with 5 single-purpose DAGs: …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1329.
+- commits: 23 [b3ce359, b874c54, 1221abc, a9f3ece, 3fd6d38, c44cf02, 3239ce4, d0edb6f, … +15]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 22 [ADDED=15, MODIFIED=7; +5058/-17]. Sample: MODIFIED `docker-compose.yml` +28/-0; ADDED `docker/airflow/dags/character_basic_pipeline.py` +15/-0; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +15/-7. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1330 — fix(airflow): gate phase DAGs on upstream terminal (PR #1329 follow-up)
 - author zbnerd; closed; created 2026-06-22T17:44:12Z; closed 2026-06-22T17:44:20Z; merged yes/2026-06-22T17:44:20Z; merge commit 3e81c8f739ba85c2c2c2f9e92ee507653237ab34. Body: ## Summary - `phase_pipeline_factory.make_phase_dag(phase, dag_id, upstream_phase=None)` — new optional parameter that wires a `wa…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1330.
+- commits: 1 [d69eedb]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [MODIFIED=4; +279/-2]. Sample: MODIFIED `docker/airflow/dags/character_basic_pipeline.py` +1/-0; MODIFIED `docker/airflow/dags/item_equipment_pipeline.py` +1/-0; MODIFIED `docker/airflow/dags/phase_pipeline_factory.py` +124/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1331 — feat(pipeline-test): docker-first startup + Airflow DAG pytest wrapper
 - author zbnerd; closed; created 2026-06-22T23:18:30Z; closed 2026-06-22T23:18:36Z; merged yes/2026-06-22T23:18:36Z; merge commit f7a66ddd0a329963c1896eca25e24b7f8d2aee7e. Body: ## Summary - **Skill**: new step `1b. Start docker services (docker-first)` runs `docker compose up airflow-db airflow-webserver a…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1331.
+- commits: 1 [79cf260]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +100/-10]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +32/-10; MODIFIED `.gitignore` +1/-0; ADDED `scripts/run-pipeline-tests.sh` +67/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #1332 — fix(pipeline-test): guard docker mode on PR #1324 infra files
 - author zbnerd; closed; created 2026-06-22T23:40:58Z; closed 2026-06-22T23:41:04Z; merged yes/2026-06-22T23:41:04Z; merge commit 274926a7c3f5bb251e3ba53f3f21aaa38e3fd675. Body: ## Summary - Add fail-fast guard at start of `START_MODE=docker` branch in step 3: if `docker-compose.services.yml` or `docker/ser…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1332.
+- commits: 1 [2a2068e]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +16/-0]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +16/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1333 — fix(airflow): add .airflowignore to tests/ to silence import errors
 - author zbnerd; closed; created 2026-06-23T02:52:24Z; closed 2026-06-23T02:52:26Z; merged yes/2026-06-23T02:52:26Z; merge commit 90787ad76e6c361ecea3ac63c4d742e681a3cda8. Body: ## Summary - Add `docker/airflow/dags/tests/.airflowignore` with content `.*` (RE2 regex) so the Airflow scheduler skips the pytes…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1333.
+- commits: 1 [1305143]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +1/-0]. Sample: ADDED `docker/airflow/dags/tests/.airflowignore` +1/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1334 — fix(pipeline-test): install kafka-python-ng in webserver too
 - author zbnerd; closed; created 2026-06-23T03:01:07Z; closed 2026-06-23T03:01:10Z; merged yes/2026-06-23T03:01:10Z; merge commit a5be8f0403b0080e05b249dc28a44c76537c73df. Body: ## Summary - Step 5 of `pipeline-test` skill now installs `kafka-python-ng` in **both** scheduler and webserver containers. ## Bac…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1334.
+- commits: 1 [87eda2d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +7/-1]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +7/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1335 — fix(airflow): per-phase gate passes on lastCompletedByPhase.terminal
 - author zbnerd; closed; created 2026-06-23T03:12:21Z; closed 2026-06-23T03:12:24Z; merged yes/2026-06-23T03:12:24Z; merge commit 83d0c9f1bbe7e9a343fc71c94c3486b54c847ea3. Body: ## Summary - `_wait_phase_terminal_fn` in `phase_pipeline_factory.py` now also passes when `current=null` AND `lastCompletedByPhas…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1335.
+- commits: 1 [f203688]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +14/-0]. Sample: MODIFIED `docker/airflow/dags/phase_pipeline_factory.py` +14/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1336 — fix(airflow): phase gate also checks lastCompletedByPhase (correct placement)
 - author zbnerd; closed; created 2026-06-23T03:18:42Z; closed 2026-06-23T03:18:45Z; merged yes/2026-06-23T03:18:45Z; merge commit 483ce2f676df03b5ea196f1ea015aeaf99258549. Body: ## Summary - Move the `lastCompletedByPhase.terminal` check inside the `if not current_run_id` block (previous PR placed it after …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1336.
+- commits: 1 [f7a4e51]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +12/-0]. Sample: MODIFIED `docker/airflow/dags/phase_pipeline_factory.py` +12/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1422 — feat(airflow): 3am KST morning_chain_pipeline orchestration DAG
 - author zbnerd; closed; created 2026-06-23T08:30:08Z; closed 2026-06-23T09:33:35Z; merged yes/2026-06-23T09:33:35Z; merge commit 4cd7e13df6178d3dfed845770983f7b7cf9ec437. Body: ## Summary - New Airflow master DAG `morning_chain_pipeline` chains the 4 existing per-phase DAGs at 03:00 KST (cron `0 18 * * *` …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1422.
+- commits: 23 [9f73189, 83e060a, a4f912d, 8f8deca, 8e2f533, f7c1ddd, d0a234a, d055377, … +15]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=3; +371/-0]. Sample: ADDED `docker/airflow/dags/morning_chain_pipeline.py` +138/-0; ADDED `docker/airflow/dags/tests/test_morning_chain_pipeline.py` +130/-0; ADDED `docs/superpowers/specs/2026-06-23-3am-pipeline-chain-design.md` +103/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1432 — docs: CLAUDE precedence directive + analytics investigation artifacts
 - author zbnerd; closed; created 2026-06-24T12:55:18Z; closed 2026-06-24T12:55:37Z; merged yes/2026-06-24T12:55:37Z; merge commit ca2132b97822f6cab560ea7a68fa72fd46930349. Body: ## Summary - **CLAUDE.md**: 맨 상단에 선제 참조 지시문 추가 — 외운 지식·LLM 기본 동작보다 CLAUDE.md 와 `.claude/rules/` 를 먼저 참조. "항상" 규칙이 매 세션 자동 로드됨을 명시해…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1432.
+- commits: 2 [ddd52de, f4da537]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 19 [ADDED=18, MODIFIED=1; +3838/-0]. Sample: MODIFIED `CLAUDE.md` +8/-0; ADDED `docs/01_ADR/ADR-735-future-analytics-platform-evaluation.md` +165/-0; ADDED `docs/superpowers/plans/2026-06-23-3am-pipeline-chain.md` +589/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1433 — fix(external-api): disable legacy daily cron (ADR-736) + Endurance Test #2
 - author zbnerd; closed; created 2026-06-25T23:26:59Z; closed 2026-06-25T23:30:25Z; merged yes/2026-06-25T23:30:25Z; merge commit 75834365ed631b86fb5d9293af44b67b7d1cd591. Body: ## Root cause — daily-rollover dual orchestration Endurance Test #2 (~71h) reproduced a 03:00 KST crash twice (06-25, 06-26). Code…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1433.
+- commits: 1 [85229a4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=2, MODIFIED=2, RENAMED=1; +313/-7]. Sample: ADDED `docs/01_ADR/ADR-736_disable-legacy-daily-cron.md` +96/-0; ADDED `docs/endurance-test/endurance-report-71h.md` +217/-0; RENAMED `docs/endurance-test/endurance-report-82h.md` +0/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1434 — feat(ops): nohup→docker deploy + autoheal/cadvisor (#1428-1431)
 - author zbnerd; closed; created 2026-06-26T00:16:31Z; closed 2026-06-26T00:16:47Z; merged yes/2026-06-26T00:16:47Z; merge commit 93e2e229a84c33a684c8e0d2c61f59bdeeca4df7. Body: ## Summary - 4 active 모듈(external-api/calculator/synchronizer/cleanup) nohup → docker compose 전환 - autoheal 가동 (4 app 컨테이너 라벨 기존 존…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1434.
+- commits: 6 [3dcb5b6, d71a658, 2f2e09d, b395132, 0e120ea, ea2f420]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=5; +1066/-0]. Sample: ADDED `docker/services/deploy-apps.sh` +168/-0; ADDED `docs/01_ADR/ADR-737_nohup-to-docker-deployment.md` +101/-0; ADDED `docs/21_Operations/docker-deploy-runbook.md` +130/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1436 — docs(skills): adapt pipeline-test to docker deployment
 - author zbnerd; closed; created 2026-06-26T00:30:23Z; closed 2026-06-26T00:30:34Z; merged yes/2026-06-26T00:30:33Z; merge commit 53af9ec1395f91578ebc7aa21aaa0e11242983e1. Body: ## Summary After #1428 (nohup→docker), the pipeline-test skill had host/nohup assumptions that broke for containerized modules. ##…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1436.
+- commits: 1 [ec8605d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +25/-6]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +25/-6. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #1437 — fix(airflow): DB reach repair + scheduler healthcheck + autoheal (#1435)
 - author zbnerd; closed; created 2026-06-26T01:05:37Z; closed 2026-06-26T01:05:58Z; merged yes/2026-06-26T01:05:58Z; merge commit 60e6134d8b2cf63a64ec307626d8fa139d83b086. Body: ## Summary Resolves #1435. Root cause: host-network airflow scheduler couldn't resolve `airflow-db` DNS (bridge, no port publish) …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1437.
+- commits: 7 [f036dda, 56f288b, fe319aa, 2022abc, 37d4e10, 2601122, 5144b83]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=3, MODIFIED=2; +630/-11]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +2/-2; MODIFIED `docker-compose.airflow.yml` +14/-9; ADDED `docs/01_ADR/ADR-738_airflow-db-port-publish.md` +100/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1438 — Release 0.6.26
 - author zbnerd; closed; created 2026-06-26T04:51:12Z; closed 2026-06-26T04:51:35Z; merged yes/2026-06-26T04:51:35Z; merge commit cc1714d55690303a123ae7fb7a8cdd055fdb2f0b. Body: Release 0.6.26 (2026-06-26). ## Contents (since last release) - #1428 nohup→docker compose deploy (4 modules) - #1429 autoheal act…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1438.
+- commits: 247 [c86c21b, 521f6db, cc4bab5, 23d82dc, 29b740a, db242d8, ca05801, 83479ad, … +239]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 250 [ADDED=152, MODIFIED=91, REMOVED=6, RENAMED=1; +30796/-1437]. Sample: MODIFIED `.claude/skills/pipeline-test/SKILL.md` +411/-44; REMOVED `.env.bootstrap.template` +0/-11; REMOVED `.env.calculator.template` +0/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1439 — docs(readme): rewrite README with ETL pipeline architecture
 - author zbnerd; closed; created 2026-06-26T05:01:57Z; closed 2026-06-26T05:02:55Z; merged yes/2026-06-26T05:02:54Z; merge commit 5351f6db596769a727aa66b61c0bb949ea8f9af8. Body: ## Summary - README 전면 재작성. ETL 파이프라인 아키텍처 다이어그램을 전면에 배치 (가독성 중심) - Control plane (Airflow morning_chain, 03:00 KST) + 4-module da…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1439.
+- commits: 1 [5f28d96]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +126/-142]. Sample: MODIFIED `README.md` +126/-142. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1440 — docs(readme): strip performance narrative (re-apply lost commit)
 - author zbnerd; closed; created 2026-06-26T05:09:50Z; closed 2026-06-26T05:10:05Z; merged yes/2026-06-26T05:10:05Z; merge commit 1c3eec4d647f9cd0898b84842027c4e394348533. Body: ## Summary - #1439 머지 시 `gh pr merge` 가 첫 커밋(성능 서사 버전)만 머지하고 strip 커밋(d16872490)을 누락하는 anomaly 발생 → develop README 에 성능 서사 잔존 - st…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1440.
+- commits: 1 [c522c7f]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +27/-96]. Sample: MODIFIED `README.md` +27/-96. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1441 — fix(airflow): morning_chain loop-started sensor condition (iterationCount -> status)
 - author zbnerd; closed; created 2026-06-26T09:55:15Z; closed 2026-06-26T10:21:02Z; merged yes/2026-06-26T10:21:02Z; merge commit f749702ec2437bdb2892cc95fab53e41b3d2fd2c. Body: ## Problem `wait_first_iteration_started` sensor gated on `iterationCount >= 1`. That counter increments only on iteration **compl…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1441.
+- commits: 1 [dd99220]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +105/-8]. Sample: MODIFIED `docker/airflow/dags/morning_chain_pipeline.py` +9/-8; ADDED `docs/01_ADR/ADR-739_loop-started-sensor-condition.md` +96/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1442 — fix(airflow): retire daily_full_pipeline (schedule=None, morning_chain owns 03:00 KST)
 - author zbnerd; closed; created 2026-06-27T13:05:38Z; closed 2026-06-27T13:06:57Z; merged yes/2026-06-27T13:06:57Z; merge commit bd2974ded7b0285755f81764fe338c1c248a2e08. Body: ## Problem `daily_full_pipeline` and `morning_chain_pipeline` both scheduled `0 18 * * *` (03:00 KST) → competed for same phase sl…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1442.
+- commits: 1 [1ec76cc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +101/-4]. Sample: MODIFIED `docker/airflow/dags/daily_full_pipeline.py` +10/-4; ADDED `docs/01_ADR/ADR-740_retire-daily-full-pipeline.md` +91/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1443 — ops(log): increase app module log retention to 500m for loop lifecycle diagnosis
 - author zbnerd; closed; created 2026-06-27T13:25:07Z; closed 2026-06-27T13:28:03Z; merged yes/2026-06-27T13:28:03Z; merge commit 5d52bba61978f76a49f5ec76762abe19e95518f4. Body: ## Problem 4 app modules used daemon-default log config (30m cap). external-api item-equipment logs every few seconds → `[Loop]` l…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1443.
+- commits: 1 [a23aeac]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +112/-0]. Sample: MODIFIED `docker-compose.services.yml` +20/-0; ADDED `docs/01_ADR/ADR-741_app-log-retention.md` +92/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #1444 — fix(loop): defer iteration when upstream OCID_LOOKUP not ready (prevent daily loop death)
 - author zbnerd; closed; created 2026-06-28T05:38:35Z; closed 2026-06-28T05:48:41Z; merged yes/2026-06-28T05:48:41Z; merge commit 0a568e26bbafe9ca61a6300124afbbc00ffd22c7. Body: ## Problem Every 03:00 KST, morning_chain refreshes OCID_LOOKUP. During that window `latestUpstreamRunId` returns null → next loop…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1444.
+- commits: 1 [3d1264d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +167/-5]. Sample: ADDED `docs/01_ADR/ADR-742_loop-upstream-defer.md` +98/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/loop/PhaseLoopController.kt` +40/-4; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/loop/PhaseLoopControllerTest.kt` +29/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1445 — docs: add troubleshooting casebook from ai-traces (problem/cause/fix/alternatives)
 - author zbnerd; closed; created 2026-06-28T07:50:09Z; closed 2026-06-28T08:02:23Z; merged yes/2026-06-28T08:02:23Z; merge commit 413e7392b0e225a3838dd380aeaf4ff677ca02f1. Body: ## Summary Synthesize `docs/ai-traces/` (110 sessions, 2026-06-09..06-28) + 192 ADRs + git history into a themed **troubleshooting…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1445.
+- commits: 2 [e6b61b1, 29bddeb]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=7; +476/-0]. Sample: ADDED `docs/24_Troubleshooting_Casebook/00_index.md` +72/-0; ADDED `docs/24_Troubleshooting_Casebook/01_async_concurrency.md` +66/-0; ADDED `docs/24_Troubleshooting_Casebook/02_memory_streaming.md` +66/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1446 — feat(module-common): add Avro schemas for snapshot/result/ocid-mapping (1425)
 - author zbnerd; closed; created 2026-06-28T13:00:32Z; closed 2026-06-28T13:00:39Z; merged yes/2026-06-28T13:00:39Z; merge commit 5858c251ad2b4c1e659ec8a9754c32a2065a6e1b. Body: ## Summary - Avro plugin + parquet-avro deps in module-common - 3 .avsc schema files: ocid-mapping, snapshot, result - schema_vers…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1446.
+- commits: 6 [349f73b, 737290f, 550bdd5, 3535179, 385294f, 0a93b54]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 6 [ADDED=5, MODIFIED=1; +1353/-0]. Sample: ADDED `docs/superpowers/plans/2026-06-28-parquet-iceberg-readiness.md` +1155/-0; ADDED `docs/superpowers/specs/2026-06-28-parquet-iceberg-readiness-design.md` +148/-0; MODIFIED `module-common/build.gradle` +8/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #1447 — feat(ext-api): Parquet+ZSTD PoC for OCID mapping (1423)
 - author zbnerd; closed; created 2026-06-28T14:03:10Z; closed 2026-06-28T14:03:22Z; merged yes/2026-06-28T14:03:22Z; merge commit c6c2fbdfb5d6814d44cde495d8eff30e332549ab. Body: ## Summary - Adds side-by-side Parquet+ZSTD writer/reader for OCID mapping - OcidLookupPhase writes both gzip JSONL (production) A…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1447.
+- commits: 6 [ba32d82, c40deb9, f821e8c, 060c56d, 39dad8c, b18292d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=7, MODIFIED=3; +460/-9]. Sample: ADDED `docs/24_Troubleshooting_Casebook/07_parquet_poc_benchmark.md` +41/-0; MODIFIED `module-external-api/build.gradle` +14/-0; ADDED `module-external-api/src/main/kotlin/maple/externalapi/poc/parquet/ParquetBenchmark.kt` +82/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #1448 — docs: small-file problem investigation + ADR (1427)
 - author zbnerd; closed; created 2026-06-28T14:10:05Z; closed 2026-06-28T14:10:14Z; merged yes/2026-06-28T14:10:14Z; merge commit 4d96bb090e60e4d00d08671f338c865b0af626f2. Body: ## Summary - Measured ~1.2K-2.4K files/run artifact creation at chunk boundaries 2000/500 - Evaluated 4 consolidation approaches (…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1448.
+- commits: 1 [ee9cb96]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=2; +265/-0]. Sample: ADDED `docs/01_ADR/ADR-743-small-file-resolution.md` +113/-0; ADDED `docs/02_Investigations/2026-06-28-small-file-measurement.md` +152/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1449 — docs: Iceberg readiness assessment (1426)
 - author zbnerd; closed; created 2026-06-28T14:12:32Z; closed 2026-06-28T14:12:42Z; merged yes/2026-06-28T14:12:42Z; merge commit 3c9d05adef87051cebecae79cfb44fe6bbe85892. Body: ## Summary - Iceberg table schema + partition spec per artifact (3 tables) - Catalog comparison + recommendation (REST + Postgres)…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1449.
+- commits: 1 [5a3ce0a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +196/-0]. Sample: ADDED `docs/superpowers/specs/2026-06-28-iceberg-adoption-design.md` +196/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1450 — fix(module-cleanup): bind KAFKA_BOOTSTRAP_SERVERS env to spring.kafka.bootstrap-servers
 - author zbnerd; closed; created 2026-06-29T00:12:47Z; closed 2026-06-29T00:13:30Z; merged yes/2026-06-29T00:13:30Z; merge commit 38f9b32d871bb94320f902a144cdbb1550ba1655. Body: ## Summary - module-cleanup's @KafkaListener (cleanup-inbox group) had no `spring.kafka.bootstrap-servers` binding in application.…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1450.
+- commits: 1 [4526237]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +2/-0]. Sample: MODIFIED `module-cleanup/src/main/resources/application.yml` +2/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1451 — docs(reports): throughput ceiling endurance test report (2026-07-02)
 - author zbnerd; closed; created 2026-07-01T23:42:57Z; closed 2026-07-01T23:43:24Z; merged yes/2026-07-01T23:43:24Z; merge commit a72c2bcf96d5b036c11d59a36fe2d3ce4fa2ce24. Body: ## Summary - 80h endurance 관측 결과 100-150 users/s 천장 확정 - Bottleneck = `ChunkedSnapshotSink` 단일 writer thread (in-process queue 300…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1451.
+- commits: 1 [bd952d5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +264/-0]. Sample: ADDED `docs/05_Reports/05_06_Load_Tests/ENDURANCE_THROUGHPUT_CEILING_20260702.md` +264/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1452 — perf(external-api): tune sink drain (Kafka batching + MinIO multipart + chunk idle flush)
 - author zbnerd; closed; created 2026-07-01T23:59:28Z; closed 2026-07-02T03:18:49Z; merged no; merge commit aff3135ba34c2ebcb8ac391b1c754ce9cc745db2. Body: ## Summary ADR-744. Three independent tunings targeting the sink drain bottleneck identified in the 2026-07-02 endurance report. -…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: closed, not merged; no application claim. Portfolio: 성능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1452.
+- commits: 1 [c2c1bbc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=1, MODIFIED=9; +185/-4]. Sample: ADDED `docs/01_ADR/ADR-744-sink-throughput-tuning.md` +106/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` +1/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` +21/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: closed without merge; evidence is not treated as applied. Portfolio: 성능.
 
 ### PR #1453 — perf(ext-api): default gzip chunk writer to BEST_SPEED
 - author zbnerd; closed; created 2026-07-02T16:25:21Z; closed 2026-07-02T23:32:13Z; merged yes/2026-07-02T23:32:13Z; merge commit 15c9396dbb303d667cc14c370a32f2e5b3298511. Body: ## Summary - Snapshot writer thread is single-threaded gzip on the hot path; item-equipment payloads are large (avg 218KB, 98% >10…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1453.
+- commits: 1 [7c120d6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +116/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` +3/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriter.kt` +19/-1; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriterTest.kt` +94/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #1454 — fix(infra): disable airflow-db parallel query (worker leak)
 - author zbnerd; closed; created 2026-07-02T23:42:28Z; closed 2026-07-02T23:43:17Z; merged yes/2026-07-02T23:43:17Z; merge commit 92a9e3545a2dfdf9723b748054ea9933ab18a5a4. Body: ## Summary - airflow-db (postgres metadata) leaks parallel workers → orphaned live workers spin ~700% CPU, recur after restart, in…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1454.
+- commits: 1 [655c4fc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +9/-0]. Sample: MODIFIED `docker-compose.airflow.yml` +9/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #842 — fix(synchronizer): resolve user_ign from character_basic_read_model
 - author zbnerd; closed; created 2026-05-19T14:56:20Z; closed 2026-05-19T14:57:20Z; merged yes/2026-05-19T14:57:20Z; merge commit bcb546dec060dd1a9e6faafcda769df0fce9f116. Body: ## Summary - `OcidUserIgnResolver`가 `game_character`(2 rows) 대신 `character_basic_read_model`(288K rows)에서 user_ign을 조회하도록 수정 - 이 변…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #842.
+- commits: 1 [140ec98]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +1/-1]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/resolver/OcidUserIgnResolver.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #843 — fix(config): remove duplicate bean definitions + update workflow rules
 - author zbnerd; closed; created 2026-05-19T15:13:44Z; closed 2026-05-19T15:14:07Z; merged yes/2026-05-19T15:14:07Z; merge commit fbacec414d4fa369f2992d4bb5a8abd9f1c9229e. Body: ## Summary - `CorePortAdapterConfig`(module-app)에서 `CalculationPortConfig`(module-infra)와 중복된 8개 bean 제거 - `BeanDefinitionOverride…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #843.
+- commits: 1 [cf8c25c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +23/-91]. Sample: MODIFIED `.claude/rules/workflow-rules.md` +23/-7; MODIFIED `module-app/src/main/java/maple/expectation/config/CorePortAdapterConfig.java` +0/-84. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #844 — feat(external-api): ranking fetch pipeline with daily cron scheduler
 - author zbnerd; closed; created 2026-05-20T02:59:49Z; closed 2026-05-20T03:00:00Z; merged yes/2026-05-20T03:00:00Z; merge commit 9a072c4a92a1eb7da8c81520304b3767ecac3090. Body: ## Summary - **RankingFetchPhase**: Nexon 전체 랭킹 API (page 1~N) 비동기 호출 → JSONL gzip 청크 저장 + character_name CSV 덮어쓰기 - **ExternalApi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #844.
+- commits: 2 [8c826e5, ed5a167]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=4, MODIFIED=7; +1014/-22]. Sample: ADDED `docs/superpowers/plans/2026-05-20-ranking-fetch-pipeline.md` +578/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/domain/ExternalApiFetchCommand.kt` +2/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/infra/nexon/NexonExternalApiClientAdapter.kt` +11/-9. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #845 — feat(external-api): OCID lookup from ranking gzip chunks, remove CSV
 - author zbnerd; closed; created 2026-05-20T03:38:53Z; closed 2026-05-20T03:44:04Z; merged yes/2026-05-20T03:44:04Z; merge commit f7b26e3cc71c228af078e1125172cfe44596d3e3. Body: ## Summary - **OcidLookupPhase reads from ranking gzip JSONL chunks** instead of CSV file - **Remove skip guard** — OCID lookup ru…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #845.
+- commits: 5 [2926172, 012fa6d, 03f8c02, 59872bd, ae782a2]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=2, MODIFIED=8, REMOVED=1; +1286/-300116]. Sample: ADDED `docs/superpowers/plans/2026-05-20-ocid-lookup-from-ranking-gzip.md` +722/-0; MODIFIED `module-app/src/main/resources/data/userIgn_List.csv` +400/-300000; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt` +18/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #846 — feat: replace per-file OCID storage with gzip JSONL + Kafka + Synchronizer
 - author zbnerd; closed; created 2026-05-20T06:59:49Z; closed 2026-05-20T09:27:48Z; merged yes/2026-05-20T09:27:48Z; merge commit d9abaf8a12c3e917b45ad8e7bdb9d4d1b5c8afcb. Body: ## Summary - Replace OcidLookupPhase per-file OCID storage (594K files, 15+ min load) with single gzip JSONL file (~18MB, <2s load…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 품질.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 3 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #846.
+- commits: 13 [69ed4e3, 2c13b4f, 0690aef, 527c181, ea9dc65, 0ee275d, 93645c2, baaad68, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 17 [ADDED=4, MODIFIED=13; +419/-71]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/cleanup/CalculatorResultCleanupScheduler.kt` +1/-1; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/storage/LocalObjectStorageAdapter.kt` +1/-1; MODIFIED `module-calculator/src/main/resources/application.yml` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 품질.
 
 ### PR #847 — fix: unify storage paths, ocid dedup, ranking yesterday date
 - author zbnerd; closed; created 2026-05-20T23:23:18Z; closed 2026-05-20T23:23:30Z; merged yes/2026-05-20T23:23:30Z; merge commit 879f8759b65771b5d4eb28c5fe27065b6aee78e3. Body: ## Summary - Unify @Value defaults from `/data/external-api` to `../data` across external-api module (3 files) - Fix `UrgentCharac…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #847.
+- commits: 4 [fc34ee9, 8c61b04, 3f5a668, b3baf09]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [MODIFIED=10; +72/-43]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/infra/storage/LocalExternalApiArtifactStoreAdapter.kt` +1/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` +2/-2; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SnapshotFetchPhase.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #848 — perf(synchronizer): reduce transient memory allocations and fix bootJar mainClass
 - author zbnerd; closed; created 2026-05-21T05:51:52Z; closed 2026-05-21T05:52:03Z; merged yes/2026-05-21T05:52:03Z; merge commit bf04b76516fb2d8a6c30a38407cccf8cc001d979. Body: ## Summary - Add `GzipUtils.compress(ByteArray)` overload to skip unnecessary String→ByteArray conversion - BasicChunkFileReader: …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #848.
+- commits: 1 [e2bb64b]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +37/-21]. Sample: MODIFIED `module-calculator/build.gradle` +1/-1; MODIFIED `module-common/src/main/kotlin/maple/expectation/util/GzipUtils.kt` +14/-4; MODIFIED `module-external-api/build.gradle` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #849 — perf(synchronizer): stream BasicChunkFileReader in sub-batches to reduce peak memory
 - author zbnerd; closed; created 2026-05-21T05:58:00Z; closed 2026-05-21T05:58:09Z; merged yes/2026-05-21T05:58:09Z; merge commit 94ea2aed084dd8767c9f84ebc615875710273ca0. Body: ## Summary - Add `readInBatches(objectKey, batchSize, handler)` to `BasicChunkFileReader` - Streams gzip JSONL line-by-line, flush…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 성능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #849.
+- commits: 1 [aa430af]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +49/-5]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` +8/-5; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/storage/BasicChunkFileReader.kt` +41/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 성능.
 
 ### PR #850 — feat(synchronizer): auto-delete consumed chunks via Kafka event + scheduler
 - author zbnerd; closed; created 2026-05-22T04:05:12Z; closed 2026-05-22T04:11:01Z; merged yes/2026-05-22T04:11:01Z; merge commit a31647a37121e28547495ba1d53d9556c785cd94. Body: ## Summary - Fix calculator double-path bug (`data/data/calculator/...` → `calculator/...`) - Synchronizer publishes `CHUNK_CONSUM…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #850.
+- commits: 2 [4d9ee92, 022304a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=3, MODIFIED=9; +205/-11]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +1/-1; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/cleanup/CalculatorResultCleanupScheduler.kt` +2/-2; MODIFIED `module-calculator/src/test/kotlin/maple/calculator/CalculatorChunkProcessingCoordinatorTest.kt` +3/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #851 — feat(infra): unified Docker Compose with profiles + app containerization
 - author zbnerd; closed; created 2026-05-23T05:58:33Z; closed 2026-05-23T06:00:19Z; merged yes/2026-05-23T06:00:19Z; merge commit 0fba638560cfd29335ce5ad0289b5a7e523ab2e7. Body: ## Summary - Merge 3 compose files → single `docker/compose/docker-compose.yml` with profile separation - Add `docker/Dockerfile.r…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #851.
+- commits: 2 [19f30c9, d4d38e9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=8, MODIFIED=2; +1404/-65]. Sample: MODIFIED `.env.example` +23/-3; ADDED `docker/Dockerfile.runtime` +15/-0; ADDED `docker/compose/backup.sh` +32/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #852 — merge Develop to master
 - author zbnerd; closed; created 2026-05-26T08:00:59Z; closed 2026-05-26T08:01:16Z; merged yes/2026-05-26T08:01:16Z; merge commit 9b107ccd1c16e0d9dc825f46a024c014417168b1. Body: none
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #852.
+- commits: 80 [d9da63b, 1ff54c8, dd8f6b5, 59732a3, 32b0792, 329b91e, 2d22588, 63d3032, … +72]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 262 [ADDED=183, MODIFIED=47, REMOVED=1, RENAMED=31; +438106/-300808]. Sample: ADDED `.claude/rules/adr-conventions.md` +106/-0; MODIFIED `.claude/rules/async-patterns.md` +23/-0; ADDED `.claude/rules/prometheus-metrics.md` +119/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #853 — docs: add 82h endurance report, architecture, and operations documentation
 - author zbnerd; closed; created 2026-05-27T00:15:46Z; closed 2026-05-27T00:16:25Z; merged yes/2026-05-27T00:16:25Z; merge commit 26fe587cb9b8164a320419bf459dabe9ff5bf08c. Body: ## Summary - 82-hour endurance test report (60M users, 4B items, 13TB raw data, zero errors) - Pipeline architecture documentation…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #853.
+- commits: 1 [6fcf4b3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 6 [ADDED=6; +1034/-0]. Sample: ADDED `docs/README.md` +40/-0; ADDED `docs/architecture.md` +240/-0; ADDED `docs/endurance-report.md` +161/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #854 — refactor(auth): decouple auth from JPA + fix external-api Prometheus 401
 - author zbnerd; closed; created 2026-05-27T01:26:16Z; closed 2026-05-27T01:26:25Z; merged yes/2026-05-27T01:26:25Z; merge commit 1dc7b282ef959e9e40f7375643e7cb1a94685679. Body: ## Summary - Extract `JwtPayload`, `JwtParserPort`, `JwtGeneratorPort` to `module-core/auth/` — lightweight modules can now use JW…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #854.
+- commits: 9 [cc80121, da6e736, fe49d18, 3ecf1b7, fa69b23, 19f1976, a98c744, 624acd5, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 16 [ADDED=4, MODIFIED=11, REMOVED=1; +520/-131]. Sample: MODIFIED `.claude/rules/code-rules.md` +5/-3; ADDED `docs/superpowers/plans/2026-05-27-auth-decoupling.md` +426/-0; MODIFIED `module-app/src/test/java/maple/expectation/application/service/character/Issues637To644E2ETest.java` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #855 — feat(observability): AI trace logging hooks for agent audit trail
 - author zbnerd; closed; created 2026-05-27T01:33:24Z; closed 2026-05-27T01:33:36Z; merged yes/2026-05-27T01:33:36Z; merge commit e4ea10a45e2a8d70b5616749d549db1256b32f04. Body: ## Summary - Session-scoped JSONL trace logging for Claude Code agent observability - 4 hooks: SessionStart, PostToolUse, UserProm…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #855.
+- commits: 1 [66a0a65]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=7; +221/-0]. Sample: ADDED `.claude/hooks/trace-lib.sh` +39/-0; ADDED `.claude/hooks/trace-prompt.sh` +20/-0; ADDED `.claude/hooks/trace-session-init.sh` +25/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #856 — feat(rest-controller): add V6 like endpoints with JWT auth
 - author zbnerd; closed; created 2026-05-27T01:57:48Z; closed 2026-05-27T01:58:20Z; merged yes/2026-05-27T01:58:20Z; merge commit 68220a2cabc40db472a4182010ee232c3d45ca20. Body: ## Summary - Add `POST /api/v6/characters/{userIgn}/like` (toggle) and `GET /api/v6/characters/{userIgn}/like/status` endpoints - …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #856.
+- commits: 1 [37cde62]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 8 [ADDED=6, MODIFIED=2; +346/-0]. Sample: MODIFIED `module-rest-controller/build.gradle` +5/-0; ADDED `module-rest-controller/src/main/kotlin/maple/restcontroller/auth/JdbcOcidQueryAdapter.kt` +50/-0; ADDED `module-rest-controller/src/main/kotlin/maple/restcontroller/auth/JwtAuthInterceptor.kt` +71/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #857 — feat(observability): improve AI trace hooks
 - author zbnerd; closed; created 2026-05-27T02:59:34Z; closed 2026-05-27T02:59:59Z; merged yes/2026-05-27T02:59:59Z; merge commit 377ed78676d273fd29ad092554f7320e7cfb274c. Body: ## Summary - Capture actual tool result in `result_preview` field (try `.tool_result`/`.result`, handle string/object types) - Aut…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #857.
+- commits: 1 [ebd64db]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +7/-2]. Sample: MODIFIED `.claude/hooks/trace-session-init.sh` +3/-0; MODIFIED `.claude/hooks/trace-tool-use.sh` +4/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #858 — feat(auth): add module-auth login with Kafka + Nexon API verification
 - author zbnerd; closed; created 2026-05-27T04:45:48Z; closed 2026-05-27T05:16:48Z; merged yes/2026-05-27T05:16:48Z; merge commit 2db3f9c286da14964ab98249b503730dcd087fbd. Body: ## Summary - Add `module-auth` with login orchestration: fingerprint generation, Kafka request/response, Redis session cache, JWT …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 운영.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 4 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #858.
+- commits: 8 [2af74e6, 2e504fe, 77d52c7, 76b0b53, 0d9c591, bef5f30, 8982f68, b3a22b5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 27 [ADDED=19, MODIFIED=8; +2161/-63]. Sample: ADDED `docs/superpowers/plans/2026-05-27-module-auth-login.md` +1318/-0; ADDED `module-auth/build.gradle` +41/-0; ADDED `module-auth/src/main/kotlin/maple/auth/fingerprint/FingerprintService.kt` +15/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 운영.
 
 ### PR #859 — fix(auth): derive fingerprint from Nexon account_id
 - author zbnerd; closed; created 2026-05-27T08:26:18Z; closed 2026-05-27T08:41:04Z; merged yes/2026-05-27T08:41:04Z; merge commit 46401bf7c8197ccc56a334de572187f2c0eaa3b1. Body: ## Summary - Fingerprint now generated from Nexon `account_id` instead of API key - Same Nexon account with multiple API keys (liv…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #859.
+- commits: 1 [708043c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [MODIFIED=9; +74/-77]. Sample: MODIFIED `module-auth/src/main/kotlin/maple/auth/kafka/AuthEventPublisher.kt` +2/-2; MODIFIED `module-auth/src/main/kotlin/maple/auth/kafka/AuthResponseConsumer.kt` +2/-2; MODIFIED `module-auth/src/main/kotlin/maple/auth/kafka/PendingLoginRegistry.kt` +7/-7. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #860 — feat(external-api,airflow): Airflow control plane adoption
 - author zbnerd; closed; created 2026-05-29T04:10:12Z; closed 2026-05-29T04:10:47Z; merged yes/2026-05-29T04:10:47Z; merge commit 38c5b883d560503e6348a7bd9cec585d6eb63f3b. Body: ## Summary - Add RunStatusTracker, PipelinePhase enum, RunStatus model for pipeline state tracking - Add InternalApiController wit…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #860.
+- commits: 8 [7293766, a981724, 2c8607c, 8322aff, a666c67, 329afb7, 7711f9a, 7c8bd33]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=11, MODIFIED=1; +1950/-6]. Sample: ADDED `docker-compose.airflow.yml` +75/-0; ADDED `docker/airflow/connections.sh` +16/-0; ADDED `docker/airflow/dags/daily_collection_pipeline.py` +82/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #861 — feat(airflow): migrate 4 cleanup schedulers to Airflow trigger endpoints
 - author zbnerd; closed; created 2026-05-29T05:47:40Z; closed 2026-05-29T06:02:53Z; merged yes/2026-05-29T06:02:53Z; merge commit e44a0f2c8587c40fdcbcf23818943a8d5487e79e. Body: ## Summary - Remove `@Scheduled` from 3 cleanup schedulers (ArtifactCleanup, ConsumedChunk, CalculatorResult) - Add trigger endpoi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #861.
+- commits: 11 [ecf854c, 6883412, 1c25adf, dd3e9f3, 9de3c7f, 8e96d33, e519292, 40636d0, … +3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 14 [ADDED=5, MODIFIED=9; +1172/-42]. Sample: MODIFIED `docker/airflow/connections.sh` +7/-0; ADDED `docker/airflow/dags/daily_cleanup_pipeline.py` +69/-0; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +9/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #862 — fix(cleanup): remove @ConditionalOnProperty from migrated schedulers
 - author zbnerd; closed; created 2026-05-29T07:54:13Z; closed 2026-05-29T07:54:54Z; merged yes/2026-05-29T07:54:54Z; merge commit a1d22b8d616091b005ea8c32c40bd01afc7fa2c3. Body: ## Summary - Remove `@ConditionalOnProperty` from `ArtifactCleanupScheduler` and `CalculatorResultCleanupScheduler` - These schedu…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #862.
+- commits: 1 [a9e8a1f]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +0/-5]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/cleanup/CalculatorResultCleanupScheduler.kt` +0/-3; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cleanup/ArtifactCleanupScheduler.kt` +0/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #863 — feat(observability): comprehensive Grafana dashboard + port fix
 - author zbnerd; closed; created 2026-05-29T07:56:17Z; closed 2026-05-29T07:56:30Z; merged yes/2026-05-29T07:56:30Z; merge commit bc3ea8507e0b638facacbd273ffc9e8f7444af46. Body: ## Summary - Add `grafana/dashboard-pipeline-comprehensive.json` — 9 sections, 30+ panels covering all 3 modules - Sections: Throu…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #863.
+- commits: 1 [8514ecb]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +434/-1]. Sample: MODIFIED `docker-compose.yml` +1/-1; ADDED `grafana/dashboard-pipeline-comprehensive.json` +433/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #864 — fix(external-api): defer item-equipment loop until daily refresh completes
 - author zbnerd; closed; created 2026-05-29T11:58:45Z; closed 2026-05-29T12:00:43Z; merged yes/2026-05-29T12:00:43Z; merge commit f804a7ff8b3efca4559d2f35ec6f0e73a83caa05. Body: ## Summary - Item-equipment loop now starts only after `triggerDailyRefresh()` completes (via `whenComplete`), not unconditionally…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #864.
+- commits: 1 [5c72d60]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +10/-1]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +10/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #865 — fix(airflow): parse XCom JSON string in poll_run_completion
 - author zbnerd; closed; created 2026-05-29T13:43:59Z; closed 2026-05-30T08:05:54Z; merged yes/2026-05-30T08:05:54Z; merge commit 906ffd1fa59b6b994f3325539ff1a78dcfa94bc0. Body: ## Summary - Fix TypeError in `poll_run_completion` where XCom returns JSON string instead of dict - Added `json.loads()` with `is…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #865.
+- commits: 2 [cefac86, 5d74412]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +47/-5]. Sample: MODIFIED `docker/airflow/dags/daily_cleanup_pipeline.py` +3/-3; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +44/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #866 — fix(cleanup): run ID parsing bug and tighten retention policy
 - author zbnerd; closed; created 2026-05-31T04:16:13Z; closed 2026-05-31T04:16:37Z; merged yes/2026-05-31T04:16:37Z; merge commit ea5c20c88df90d03146c6b8822b29b379de17a28. Body: ## Summary - Fix `parseRunIdTimestamp` to handle run IDs with random suffix (`yyyyMMdd-HHmmss-XXXXXXXXX`) using `substringBeforeLa…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #866.
+- commits: 1 [2002c6a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +6/-5]. Sample: MODIFIED `docker/airflow/dags/daily_cleanup_pipeline.py` +1/-1; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cleanup/ArtifactCleanupScheduler.kt` +2/-1; MODIFIED `module-external-api/src/main/resources/application.yml` +3/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #879 — fix(kafka): add DLQ and DefaultErrorHandler for poison message prevention
 - author zbnerd; closed; created 2026-05-31T05:52:19Z; closed 2026-05-31T05:57:04Z; merged yes/2026-05-31T05:57:04Z; merge commit 00c31c77028116f91abdc5810c036a991f70192d. Body: ## Summary - Add `KafkaConsumerConfig` with `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` to calculator, external-api, s…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #879.
+- commits: 1 [7ddc6d4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=3, MODIFIED=2; +109/-5]. Sample: ADDED `module-calculator/src/main/kotlin/maple/calculator/config/KafkaConsumerConfig.kt` +34/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` +3/-2; ADDED `module-external-api/src/main/kotlin/maple/externalapi/config/KafkaConsumerConfig.kt` +34/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #880 — fix(infra): VT executor shutdown hooks + runBlocking removal
 - author zbnerd; closed; created 2026-06-03T06:26:10Z; closed 2026-06-03T06:46:07Z; merged yes/2026-06-03T06:46:07Z; merge commit d666ea34fd38a7fefbc4c4935709106935d5d91d. Body: Fixes #870, #869 ## Changes - **#870**: Add `@PreDestroy` to 8 virtual thread executors missing shutdown hooks - ExecutorConfig: a…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #880.
+- commits: 1 [be92b9c]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +130/-16]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/consumer/KafkaSnapshotChunkReadyConsumer.kt` +43/-5; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` +11/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/EventConsumerConfig.kt` +18/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #881 — fix(airflow): handle 409 CONFLICT in DAG response checks
 - author zbnerd; closed; created 2026-06-03T06:29:29Z; closed 2026-06-03T06:46:11Z; merged yes/2026-06-03T06:46:11Z; merge commit 1f1898507b299cf1931b3c251ad6edd9c70e2268. Body: Fixes #868 ## Changes - Add `is_accepted_response()` helper to both DAGs — treats 409 CONFLICT as success - `poll_run_completion`:…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #881.
+- commits: 1 [cd8062e]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +36/-6]. Sample: MODIFIED `docker/airflow/dags/daily_cleanup_pipeline.py` +17/-4; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +19/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #882 — fix(calculator): eliminate TOCTOU race in chunk processing
 - author zbnerd; closed; created 2026-06-03T07:28:00Z; closed 2026-06-03T07:36:08Z; merged yes/2026-06-03T07:36:08Z; merge commit f4fb5fc3bd737b3cdc1934f253f879df4b8b2f5f. Body: Fixes #874 Move objectStorage.exists() checks inside concurrency.withPermit block. Before: exists() → withPermit → executeChunk (T…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #882.
+- commits: 2 [429d2d1, 73477dd]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +53/-28]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +13/-12; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cleanup/ConsumedChunkCleanupScheduler.kt` +40/-16. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #883 — fix(external-api): ConsumedChunkCleanup concurrency overhaul
 - author zbnerd; closed; created 2026-06-03T07:31:12Z; closed 2026-06-03T07:36:12Z; merged yes/2026-06-03T07:36:12Z; merge commit 2e81fa6ed60c2f9875e6dc508854393531da93f3. Body: Fixes #872, #871 Bounded queue (AtomicInteger O(1)), synchronous deletion, @Scheduled auto-cleanup, @PreDestroy drain. 🤖 Generated…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #883.
+- commits: 1 [330dc67]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +40/-16]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/cleanup/ConsumedChunkCleanupScheduler.kt` +40/-16. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #884 — fix(external-api): atomic RunStatusTracker state transitions
 - author zbnerd; closed; created 2026-06-03T07:35:09Z; closed 2026-06-03T07:36:16Z; merged yes/2026-06-03T07:36:16Z; merge commit 5b2a14ad35bb17d0453abe5018da9fbb5aabeef4. Body: Fixes #873 Capture `updateAndGet` result in local variable + add `runId` parameter to `completeRun`/`failRun`. Guard: skip transit…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #884.
+- commits: 1 [ba3f7d0]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +17/-15]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/RunStatusTracker.kt` +12/-10; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +2/-2; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/runstatus/RunStatusTrackerTest.kt` +3/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #885 — fix(airflow): Kafka networking and correctness fixes
 - author zbnerd; closed; created 2026-06-03T08:53:47Z; closed 2026-06-03T11:04:31Z; merged yes/2026-06-03T11:04:31Z; merge commit 3d3083a921494a8f5683f43f7209a8eb52243767. Body: Fixes #878 ## Changes - **connections.sh**: Remove double http:// scheme in --conn-host (scheme already from --conn-schema) - **ru…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #885.
+- commits: 2 [6d3c24d, d386f13]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +12/-7]. Sample: MODIFIED `docker/airflow/connections.sh` +2/-2; MODIFIED `docker/airflow/dags/daily_collection_pipeline.py` +10/-5. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #886 — fix(synchronizer): OCID upsert batch, error handling, dead code removal
 - author zbnerd; closed; created 2026-06-03T11:01:30Z; closed 2026-06-03T11:04:34Z; merged yes/2026-06-03T11:04:34Z; merge commit df514f7673356894cc3c607ece95f45c5d0e7a08. Body: Fixes #876 ## Changes - **Batch OCID upsert**: Replace per-row DELETE+INSERT loop with `OcidMappingRepository.batchUpsert()` (COPY…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #886.
+- commits: 3 [b199bf4, 7e28fa2, bab697e]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=2, REMOVED=1; +14/-100]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` +6/-20; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` +8/-1; REMOVED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/SynchronizerChunkStatusRepository.kt` +0/-79. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #887 — fix(synchronizer): atomic Redis writes
 - author zbnerd; closed; created 2026-06-03T11:04:03Z; closed 2026-06-03T11:04:38Z; merged yes/2026-06-03T11:04:38Z; merge commit 4190eaeb782af81871feb3618e0d644bf0a636ca. Body: Fixes #875 ## Changes - **OcidMapping atomic writes**: Replace `delete + hSet` with `write-to-temp + RENAME` pattern. RENAME is at…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #887.
+- commits: 2 [7a4bf94, 7cdc5e6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +19/-5]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/ranking/EquipmentRankingRedisWriter.kt` +10/-2; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/OcidMappingRepository.kt` +9/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #908 — refactor(calculator): consolidate @Value into CleanupProperties, extract @Import into Engi…
 - author zbnerd; closed; created 2026-06-03T14:12:54Z; closed 2026-06-03T14:36:16Z; merged yes/2026-06-03T14:36:16Z; merge commit 91a49017ceb59052620aa9fc013bf2abbe4efa62. Body: ## Summary - **#890**: `CalculatorResultCleanupScheduler` 6 `@Value` → `CalculatorCleanupProperties` data class - **#891**: `Calcu…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #908.
+- commits: 1 [717bbfa]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=2, MODIFIED=2; +76/-59]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` +4/-39; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/cleanup/CalculatorResultCleanupScheduler.kt` +10/-20; ADDED `module-calculator/src/main/kotlin/maple/calculator/config/CalculatorCleanupProperties.kt` +17/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #909 — refactor: config binding consolidation + metrics event listener extraction
 - author zbnerd; closed; created 2026-06-03T14:35:19Z; closed 2026-06-03T14:36:21Z; merged yes/2026-06-03T14:36:21Z; merge commit 327f3bf22b6c5133b27fee1e0f71c1af386af805. Body: ## Summary - **#893**: `ChunkConsumerTemplate` 4 `@Value` → `ChunkExecutionProperties` data class (synchronizer) - **#894**: `Calc…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #909.
+- commits: 1 [cd793dc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=5, MODIFIED=7; +249/-98]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +20/-20; ADDED `module-calculator/src/main/kotlin/maple/calculator/event/ChunkProcessingEvent.kt` +33/-0; ADDED `module-calculator/src/main/kotlin/maple/calculator/metrics/CalculatorMetricsListener.kt` +44/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #910 — refactor: deduplicate code — maskIgn, CharacterId, gzipCompress/sha256Hex
 - author zbnerd; closed; created 2026-06-03T14:56:19Z; closed 2026-06-03T14:58:03Z; merged yes/2026-06-03T14:58:03Z; merge commit 1ebf95b49f827278ef37a6f4c37288d7d5837dcb. Body: ## Summary - **DUP-10**: Private `maskIgn` in 2 files → `StringMaskingUtils.maskIgn` - **DUP-6**: Duplicate `CharacterId` removed …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #910.
+- commits: 1 [42b2826]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=1, MODIFIED=10, REMOVED=1; +42/-96]. Sample: MODIFIED `module-app/src/main/java/maple/expectation/config/CorePortAdapterConfig.java` +1/-1; MODIFIED `module-common/src/main/kotlin/maple/expectation/util/GzipUtils.kt` +11/-0; ADDED `module-common/src/main/kotlin/maple/expectation/util/HashUtils.kt` +11/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #911 — refactor: merge High/Low EventConsumer, remove dead CubeRatePort
 - author zbnerd; closed; created 2026-06-03T15:07:28Z; closed 2026-06-03T15:07:31Z; merged yes/2026-06-03T15:07:31Z; merge commit 218147182cd92508a99828d681ebbd0e8b0d3408. Body: ## Summary - **DUP-2**: `HighPriorityEventConsumer` + `LowPriorityEventConsumer` (84 lines each) → `IntegrationEventConsumer` base…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #911.
+- commits: 1 [4257285]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=1, MODIFIED=2, REMOVED=1; +92/-167]. Sample: REMOVED `module-core/src/main/kotlin/maple/expectation/core/calculator/port/CubeRatePort.kt` +0/-19; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/event/HighPriorityEventConsumer.kt` +4/-74; ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/event/IntegrationEventConsumer.kt` +84/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #912 — refactor: extract VirtualThreadExecutorManager for VT executor lifecycle (PAT-1)
 - author zbnerd; closed; created 2026-06-03T15:16:14Z; closed 2026-06-03T15:16:18Z; merged yes/2026-06-03T15:16:18Z; merge commit 49741b2aff63b0befdcc137335d5e2a33fafd793. Body: ## Summary - New `VirtualThreadExecutorManager` utility — creates VT executor + standardized shutdown (5s timeout, shutdownNow fal…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #912.
+- commits: 1 [920c119]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=1, MODIFIED=10; +89/-81]. Sample: MODIFIED `module-calculator/src/main/kotlin/maple/calculator/cleanup/InternalApiController.kt` +4/-4; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` +4/-9; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiController.kt` +6/-6. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1113 — fix: replace CallerRunsPolicy with AbortPolicy (taskExecutor, backfillExecutor)
 - author zbnerd; closed; created 2026-06-04T00:50:33Z; closed 2026-06-04T00:51:20Z; merged yes/2026-06-04T00:51:20Z; merge commit 6f284ec4ad3a183abced6c4f1ed3031d446effb1. Body: ## Summary Replace `CallerRunsPolicy` with `AbortPolicy` for `taskExecutor` and `backfillExecutor` in `ExecutorConfig.kt`. **Probl…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1113.
+- commits: 1 [1824992]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +81/-2]. Sample: MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/ExecutorConfig.kt` +2/-2; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/RejectionPolicyFactory.kt` +79/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1114 — fix: add @PreDestroy executor lifecycle to 5 components
 - author zbnerd; closed; created 2026-06-04T00:50:36Z; closed 2026-06-04T00:51:23Z; merged yes/2026-06-04T00:51:23Z; merge commit 276d1ead9e53fd2d2bd0f2026f8e06faada530b9. Body: ## Summary Add `@PreDestroy` shutdown lifecycle to 5 components that create inline executors without cleanup. **Problem:** 5 compo…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1114.
+- commits: 1 [5b1a906]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [MODIFIED=7; +67/-7]. Sample: MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/admission/AdaptiveAdmissionControl.kt` +20/-3; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/admission/SimpleAdmissionControl.kt` +2/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/bulk/BulkLoaderService.kt` +16/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1115 — refactor: replace Thread.ofPlatform() with ExecutorService in ChunkedSnapshotSink
 - author zbnerd; closed; created 2026-06-04T00:50:39Z; closed 2026-06-04T00:51:26Z; merged yes/2026-06-04T00:51:26Z; merge commit db5ad83f23baa5566c807bb9d6a0b502ff886169. Body: ## Summary Replace raw `Thread.ofPlatform()` with managed `ExecutorService` in `ChunkedSnapshotSink`. **Problem:** `ChunkedSnapsho…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1115.
+- commits: 1 [f445d42]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +12/-6]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` +12/-6. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1116 — fix: TieredCache keyVersions memory leak + PgmqWorker shutdown drain
 - author zbnerd; closed; created 2026-06-04T00:50:42Z; closed 2026-06-04T00:51:28Z; merged yes/2026-06-04T00:51:28Z; merge commit 9e3f7b0d2645eb28ffe40f2c5ac6118167678616. Body: ## Summary Fix TieredCache `keyVersions` unbounded memory leak and PgmqWorker shutdown data loss. ### Part A: TieredCache keyVersi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1116.
+- commits: 1 [51f7e06]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +26/-11]. Sample: MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/TieredCache.kt` +14/-11; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/PgmqWorker.kt` +12/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1117 — fix: Backpressure — OcidLookup/SnapshotFetch/UrgentConsumer 동시성 제한
 - author zbnerd; closed; created 2026-06-04T01:44:44Z; closed 2026-06-04T02:20:38Z; merged yes/2026-06-04T02:20:38Z; merge commit 2818e6f7f9daf3975e7f61b6bb2c4197bb046978. Body: ## Summary Closes #1108 5개 위치에 backpressure 메커니즘 추가: 위치 변경 설정값 ------ ------ -------- OcidLookupPhase Semaphore + backoff retry `m…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1117.
+- commits: 1 [0fc8ea5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=1, MODIFIED=10; +219/-39]. Sample: ADDED `docs/01_ADR/ADR-backpressure-concurrency-limits.md` +92/-0; MODIFIED `module-app/src/main/resources/application.yml` +2/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` +45/-18. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1118 — fix: Blocking-in-async — Discord subscribe, TieredCache/SingleFlight/AuthClient timeout
 - author zbnerd; closed; created 2026-06-04T02:07:12Z; closed 2026-06-04T02:20:52Z; merged yes/2026-06-04T02:20:52Z; merge commit 30f0bbc50b503799d5b21f256019154c37d129d8. Body: ## Summary Closes #1109 4개 위치 blocking 패턴 수정: 위치 변경 타임아웃 ------ ------ ---------- DiscordAlertChannel `.block()` → `.subscribe()` …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1118.
+- commits: 1 [dc61fd6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=1, MODIFIED=4; +141/-44]. Sample: ADDED `docs/01_ADR/ADR-blocking-in-async-timeout.md` +90/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/alert/channel/DiscordAlertChannel.kt` +19/-41; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/TieredCache.kt` +17/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1119 — refactor(#1063): Split ExecutorConfig into Core + Infra
 - author zbnerd; closed; created 2026-06-04T02:47:31Z; closed 2026-06-04T02:48:10Z; merged yes/2026-06-04T02:48:10Z; merge commit 2ce910d542403d3cec7033f05f386ca368d0c1c0. Body: #1063 ## Changes - **CoreExecutorConfig** — LogicExecutor, CheckedLogicExecutor, ExecutionPipeline, ExceptionTranslator, LoggingPo…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1119.
+- commits: 1 [c425692]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=2, MODIFIED=5; +335/-361]. Sample: MODIFIED `module-app/src/test/java/maple/expectation/config/ExecutorConfigTest.java` +19/-13; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/config/CalculatorEngineConfiguration.kt` +2/-2; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/ExternalApiApplication.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1120 — arch(#1068): VT ExecutorManager inline → @Bean injection
 - author zbnerd; closed; created 2026-06-04T03:05:17Z; closed 2026-06-04T03:18:12Z; merged yes/2026-06-04T03:18:12Z; merge commit 3f1a321f9bf823493468cf64e1fbc18a517bddcf. Body: #1068, Closes #1041 ## Changes - **VtExecutorConfig** — 6 named VT `ExecutorService` beans with `@PreDestroy` centralized shutdown…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1120.
+- commits: 1 [8bca3f1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=1, MODIFIED=11; +130/-64]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/ExternalApiApplication.kt` +1/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` +4/-9; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/runstatus/InternalApiController.kt` +6/-9. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1121 — docs(#901): ADR-721 sync boundary justification
 - author zbnerd; closed; created 2026-06-04T03:27:39Z; closed 2026-06-04T03:32:03Z; merged yes/2026-06-04T03:32:02Z; merge commit da78f6163b2f013ea4df5c10a1d1cffb6c9d3d67. Body: #901 ## Summary All 15 identified `.join()`/`.get()`/`runBlocking` violations analyzed: - **4 fixed** in #1109 (TieredCache timeou…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1121.
+- commits: 1 [4e66ba3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +106/-0]. Sample: ADDED `docs/01_ADR/ADR-721_sync-boundary-justification.md` +106/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1122 — fix(#905): concurrency antipatterns — semaphore leak, volatile, bounded buffer, init race
 - author zbnerd; closed; created 2026-06-04T03:46:35Z; closed 2026-06-04T03:46:52Z; merged yes/2026-06-04T03:46:52Z; merge commit e9ada29a0bf2ff36a7be21a42f7c3228aec287fc. Body: #905 ## Changes # Component Issue Fix --- ----------- ------- ----- 1 SimpleAdmissionControl Semaphore permit leak on exception Mo…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1122.
+- commits: 1 [4a1a4fc]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [MODIFIED=5; +29/-14]. Sample: MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/admission/SimpleAdmissionControl.kt` +14/-11; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/monitoring/copilot/pipeline/SignalDefinitionLoader.kt` +7/-2; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/AccumulationBuffer.kt` +3/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1123 — fix(#1102): remove ForkJoinPool.commonPool() — dedicated executor for all 8 sites
 - author zbnerd; closed; created 2026-06-04T04:01:18Z; closed 2026-06-04T04:01:42Z; merged yes/2026-06-04T04:01:42Z; merge commit 33941a00331dd40df084e03f0d65e871e2f4fbd6. Body: #1102, Closes #1046, Closes #1027 ## Changes # Component Before After --- ----------- -------- ------- 1-2 LikeController `supplyA…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1123.
+- commits: 1 [6f22ef7]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [ADDED=1, MODIFIED=8; +70/-21]. Sample: MODIFIED `module-core/src/main/kotlin/maple/expectation/core/port/out/EventPublisher.kt` +1/-1; MODIFIED `module-infra/src/main/java/maple/expectation/application/service/expectation/PresetCalculationHelper.java` +19/-10; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/messaging/KafkaEventPublisher.kt` +4/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1124 — refactor(#984): Recursive CF → suspend fun + while loop
 - author zbnerd; closed; created 2026-06-04T05:22:09Z; closed 2026-06-04T05:22:49Z; merged yes/2026-06-04T05:22:49Z; merge commit df202a28b6a702e8899ee8ff3b182eca7dedaa23. Body: ## Summary 3 Phase classes in `module-external-api` converted from recursive `CompletableFuture` chains to `suspend fun` + while l…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1124.
+- commits: 5 [94ca788, 7660e3a, ae0addc, 1f3a5fa, 8e182ae]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=1, MODIFIED=6; +287/-289]. Sample: MODIFIED `gradle/libs.versions.toml` +1/-0; MODIFIED `module-external-api/build.gradle` +1/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` +86/-106. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1132 — refactor(external-api-worker): CF chaining pipeline (#1112)
 - author zbnerd; closed; created 2026-06-04T06:25:51Z; closed 2026-06-04T06:26:28Z; merged yes/2026-06-04T06:26:28Z; merge commit 0ad17c0afe3725a2448a3f0f03da4547a9c83c22. Body: ## Summary - ExternalApiWorker.processPipeline()을 CompletableFuture 체이닝으로 전환 - `.join()` 3회 + `runBlocking` 1회 → 단일 `.join()` (ACK…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1132.
+- commits: 4 [53ed8ca, 9599935, 8cade5c, 826cf48]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=1, MODIFIED=3; +259/-153]. Sample: ADDED `docs/01_ADR/ADR-XXX_external-api-worker-cf-chaining.md` +99/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/executor/StepTimer.kt` +5/-4; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/worker/ExternalApiWorker.kt` +152/-149. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1133 — fix(1001): propagate ranking failure; gate item-equipment loop on success
 - author zbnerd; closed; created 2026-06-04T12:40:01Z; closed 2026-06-04T12:41:44Z; merged yes/2026-06-04T12:41:44Z; merge commit 3d59da8ecaba60a1a63e74ad68773de565a8b449. Body: ## Summary Fixes https://github.com/zbnerd/probabilistic-valuation-engine/issues/1001 The `ExternalApiScheduler.triggerDailyRefres…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1133.
+- commits: 14 [7c99271, b54d1a8, 48689be, 0a4b1dd, 30d88cb, 782dcf3, fcb9015, d7bee9d, … +6]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 16 [ADDED=12, MODIFIED=4; +3541/-60]. Sample: ADDED `docs/superpowers/plans/2026-06-04-externalapi-null-to-exception.md` +579/-0; ADDED `docs/superpowers/plans/2026-06-04-issue-1001-scheduler-failure-propagation-plan.md` +378/-0; ADDED `docs/superpowers/plans/2026-06-04-issue-1018-null-ocid-observability.md` +272/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1134 — fix(external-api): log warn for null ocid in OcidLookupPhase (issue 1018)
 - author zbnerd; closed; created 2026-06-04T12:41:13Z; closed 2026-06-04T12:42:10Z; merged yes/2026-06-04T12:42:10Z; merge commit 3b29a426c49b06f1eff1301e3a0caab31b573da2. Body: ## Summary - Add `log.warn("[OCID] null ocid for ign={}", maskIgn(ign))` to `OcidLookupPhase.fetchOcid()` else-branch - Surface Ne…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1134.
+- commits: 3 [3c4a703, e7906e8, 59d32eb]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [MODIFIED=2; +47/-2]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` +5/-1; MODIFIED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` +42/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1135 — fix(external-api): ArtifactStore/Cleanup null→예외 for #999
 - author zbnerd; closed; created 2026-06-04T12:53:57Z; closed 2026-06-04T12:54:20Z; merged yes/2026-06-04T12:54:20Z; merge commit c1048e297962ca7955a987372911e7bdf3ae9b87. Body: ## Summary EPIC-2 silent data loss 제거 — `module-external-api`의 두 null/boolean swallow 경로를 명시적 예외로 변환. - **`LocalExternalApiArtifac…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 1 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1135.
+- commits: 6 [7513ec2, e16657c, d1a3399, 86cdbd8, 488e5eb, bf09f89]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=4, MODIFIED=6; +216/-121]. Sample: MODIFIED `docs/superpowers/plans/2026-06-04-externalapi-null-to-exception.md` +33/-105; MODIFIED `docs/superpowers/specs/2026-06-04-externalapi-null-to-exception-design.md` +7/-7; MODIFIED `module-common/src/main/kotlin/maple/expectation/error/CommonErrorCode.kt` +1/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1136 — fix(1019): add debug logging to synchronizer file reader silent parse paths
 - author zbnerd; closed; created 2026-06-04T13:03:23Z; closed 2026-06-04T13:04:19Z; merged yes/2026-06-04T13:04:19Z; merge commit e5319abc0cda527fb2c20fa0eee24dbbff2dd2f4. Body: ## Summary - `OcidMappingFileReader.parseMapping()` — 2 null paths + runCatching.onFailure logged - `BasicChunkFileReader.parseRec…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1136.
+- commits: 4 [34f0a05, 66e7dec, 4c6fe72, 9a236f2]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [ADDED=2, MODIFIED=2; +313/-9]. Sample: ADDED `docs/superpowers/plans/2026-06-04-1019-synchronizer-file-reader-logging.md` +203/-0; ADDED `docs/superpowers/specs/2026-06-04-1019-synchronizer-file-reader-logging-design.md` +77/-0; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/storage/BasicChunkFileReader.kt` +24/-6. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1137 — fix(scheduler,synchronizer): surface lock timeout + reader parse errors
 - author zbnerd; closed; created 2026-06-04T13:07:43Z; closed 2026-06-04T13:10:47Z; merged yes/2026-06-04T13:10:47Z; merge commit 33781f68a2b3cc8ed4b52e2f0807fb5b7327307b. Body: ## Summary Closes #998 and #996. ### #998 — ExternalApiScheduler acquireLock timeout - `acquireLock` now throws `DistributedLockEx…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1137.
+- commits: 10 [5075845, 249b591, b214f99, 4a74ed4, a76b933, 8f53f0e, 7ebe2a7, c1401db, … +2]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=5, MODIFIED=5; +407/-79]. Sample: ADDED `module-external-api/src/main/kotlin/maple/externalapi/metrics/SchedulerMetrics.kt` +24/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` +19/-7; ADDED `module-external-api/src/test/kotlin/maple/externalapi/metrics/SchedulerMetricsTest.kt` +23/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1139 — fix(1138): add debug logging for empty userIgn exclusions in OcidUserIgnResolver
 - author zbnerd; closed; created 2026-06-04T13:18:10Z; closed 2026-06-04T13:18:28Z; merged yes/2026-06-04T13:18:27Z; merge commit 14aa19f9402339e3368c70e4d627923b3ea1689b. Body: ## Summary - Add aggregate debug log to OcidUserIgnResolver.resolve() showing count + sample of OCIDs excluded for empty user_ign …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1139.
+- commits: 3 [07a4b39, 5b79a74, 092db1a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=2, MODIFIED=1; +223/-7]. Sample: ADDED `docs/superpowers/plans/2026-06-04-1138-ocid-user-ign-resolver-logging.md` +116/-0; ADDED `docs/superpowers/specs/2026-06-04-1138-ocid-user-ign-resolver-logging-design.md` +94/-0; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/resolver/OcidUserIgnResolver.kt` +13/-7. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1140 — refactor(1077): split OcidMappingRepository into DB and Redis
 - author zbnerd; closed; created 2026-06-04T13:47:22Z; closed 2026-06-04T13:49:52Z; merged yes/2026-06-04T13:49:52Z; merge commit 38d72c7171db2a71ae03fc3fde435b7f2ec4ae11. Body: ## Summary - Split `OcidMappingRepository` (DB-only) and new `OcidMappingRedisWriter` (Redis-only). - `OcidLookupRunConsumer` inje…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1140.
+- commits: 3 [0e63740, b56d9da, 52904ee]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +41/-28]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` +3/-1; ADDED `module-synchronizer/src/main/kotlin/maple/synchronizer/redis/OcidMappingRedisWriter.kt` +38/-0; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/OcidMappingRepository.kt` +0/-27. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1141 — refactor(933): decompose synchronizer repository SQL methods
 - author zbnerd; closed; created 2026-06-05T00:35:54Z; closed 2026-06-05T00:38:11Z; merged yes/2026-06-05T00:38:11Z; merge commit 91269c42211cb550e376e049d273bb3a9b38126c. Body: ## Summary - Extract SQL strings to companion constants in 3 repositories. - Extract parameter binding to `buildUpsertParams()` he…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1141.
+- commits: 1 [a386613]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [MODIFIED=3; +104/-83]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/CharacterBasicRepository.kt` +32/-28; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/EquipmentReadModelRepository.kt` +28/-26; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/OcidMappingRepository.kt` +44/-29. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1142 — fix(1106,1107): DB access pattern fixes — N+1, LIMIT, chunking, batch INSERT
 - author zbnerd; closed; created 2026-06-05T01:00:29Z; closed 2026-06-05T01:01:45Z; merged yes/2026-06-05T01:01:45Z; merge commit 5ee7615f11c6904ea82035a8a59ddd073c6bb9e0. Body: ## Summary - **#1106:** Replace N+1 `forEach` in `AbstractExpectationCalcWorker` with existing `batchUpsertFromCalculations()` met…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1142.
+- commits: 4 [5445602, 542a6db, 247edf7, 5fbc3db]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 4 [MODIFIED=4; +18/-20]. Sample: MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/jpa/GameCharacterJpaRepositoryCustomImpl.kt` +1/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/ExpectationBatchRepository.kt` +8/-6; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/pgmq/DlqReplayWorker.kt` +4/-11. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1143 — refactor(923): decompose DefaultChunkProcessor into read/transform/write stages
 - author zbnerd; closed; created 2026-06-05T01:41:09Z; closed 2026-06-05T01:56:27Z; merged yes/2026-06-05T01:56:27Z; merge commit 974efe438cd7bab9ae241f536c2b3ec459027ded. Body: ## Summary Decompose `DefaultChunkProcessor.process()` into 3 `@Component` stages: - **ChunkDataReader** — file read + OCID resolu…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1143.
+- commits: 6 [caf1ac2, 13a9ebd, c169c25, 0cd233e, cdff928, f92d632]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=3, MODIFIED=2; +142/-78]. Sample: ADDED `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/ChunkDataReader.kt` +32/-0; ADDED `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/ChunkDocumentTransformer.kt` +48/-0; ADDED `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/ChunkDocumentWriter.kt` +22/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1144 — refactor(943): DRY extraction — CompressionUtils, sha256Hex, KafkaConsumerConfig
 - author zbnerd; closed; created 2026-06-05T02:29:09Z; closed 2026-06-05T02:29:45Z; merged yes/2026-06-05T02:29:45Z; merge commit f41a3208467527c7536ffd8738939c43ff8814f4. Body: ## Summary Extract 3 duplicated patterns: - **CompressionUtils.ratioString()** → `module-common/util/` (new, pure Kotlin object) -…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1144.
+- commits: 4 [7a8da95, fbe3316, 0fd7b40, 8aba809]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 30 [ADDED=17, MODIFIED=10, REMOVED=2, RENAMED=1; +6488/-90]. Sample: ADDED `docs/11_Observability/bug-scan-2026-05-31.md` +84/-0; ADDED `docs/superpowers/plans/2026-06-03-concurrency-fixes.md` +451/-0; ADDED `docs/superpowers/plans/2026-06-03-infra-reliability-fixes.md` +602/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1145 — refactor(952): unify missing-file error strategy in BasicChunkFileReader
 - author zbnerd; closed; created 2026-06-05T02:41:10Z; closed 2026-06-05T02:41:51Z; merged yes/2026-06-05T02:41:51Z; merge commit dd8438fe623f20796451c22adc88ca5684af3432. Body: ## Summary Unify missing-file error handling in `BasicChunkFileReader` — changed `require()` (→ `IllegalArgumentException`) to exp…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1145.
+- commits: 1 [f3d095e]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [MODIFIED=1; +2/-2]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/storage/BasicChunkFileReader.kt` +2/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1146 — refactor: module-core port interface tech-name removal (#906)
 - author zbnerd; closed; created 2026-06-05T04:19:41Z; closed 2026-06-05T04:20:26Z; merged yes/2026-06-05T04:20:26Z; merge commit b9274797adca981f48e8a2439b237a0e3e9766e0. Body: Resolves #906 (Leaky Abstraction cleanup, partial). ## Summary Removes infrastructure technology names (PGMQ, Redis, Kafka, MySQL)…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1146.
+- commits: 9 [dc4c0c8, 9b107cc, 92700f0, e950307, 480c08a, a6a3b0f, ce2a2f6, 56857db, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 27 [ADDED=6, MODIFIED=18, RENAMED=3; +1102/-153]. Sample: ADDED `docs/superpowers/plans/2026-06-05-port-abstraction-cleanup.md` +847/-0; ADDED `docs/superpowers/specs/2026-06-05-port-abstraction-cleanup-design.md` +136/-0; MODIFIED `module-app/src/main/java/maple/expectation/application/service/expectation/queue/ExpectationCalculationQueue.java` +4/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1147 — fix(infra): @Transactional hygiene — readOnly 명시, scope 축소, @Async+TX 분리 (#1104)
 - author zbnerd; closed; created 2026-06-05T04:36:23Z; closed 2026-06-05T04:36:49Z; merged yes/2026-06-05T04:36:49Z; merge commit 0279b38060b24f927f23873f31d99ee5ae40f010. Body: ## Summary Resolves #1104. \`@Transactional\` 위생 — readOnly 명시, scope 축소, @Async+TX 분리. ## Changes (5 commits on `worktree-chore+1…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 결함·보안.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1147.
+- commits: 6 [25aa821, 12100ff, e896f42, aa44db5, 4d37f95, 2c6a9d3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=1, MODIFIED=6; +881/-67]. Sample: ADDED `docs/superpowers/plans/2026-06-05-tx-hygiene.md` +731/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/CalculationExecutionService.kt` +64/-16; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/CalculationJobService.kt` +16/-16. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 결함·보안.
 
 ### PR #1148 — refactor(infra): move 7 v2 entities + 5 ports to infrastructure/persistence (#896)
 - author zbnerd; closed; created 2026-06-05T04:37:06Z; closed 2026-06-05T04:37:21Z; merged yes/2026-06-05T04:37:20Z; merge commit ac704b1d616322a6a9771e9a13d8e0ffbd5d94ca. Body: Move legacy JPA entities from module-infra/domain/v2/ to infrastructure/persistence/entity/, port interfaces from domain/repositor…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1148.
+- commits: 4 [12f8cc5, 03ec7cf, feb90b5, a600302]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 75 [ADDED=3, MODIFIED=59, REMOVED=5, RENAMED=8; +1180/-911]. Sample: ADDED `docs/superpowers/plans/2026-06-05-issue-896-domain-v2-migration.md` +889/-0; MODIFIED `module-app/src/main/java/maple/expectation/application/service/EquipmentApplicationService.java` +1/-1; MODIFIED `module-app/src/main/java/maple/expectation/application/service/character/CharacterCreationService.java` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1149 — refactor: relocate outbox query from CalculationJobPortAdapter to OutboxEventPortAdapter (…
 - author zbnerd; closed; created 2026-06-05T04:38:35Z; closed 2026-06-05T04:39:26Z; merged yes/2026-06-05T04:39:26Z; merge commit 5ecaca1a7ceeb62f1c7c8f72c1bcb1b599f6c6db. Body: ## Summary Relocates `findCompletedJobsMissingOutboxEvents` from `CalculationJobPort`/`CalculationJobPortAdapter` to `OutboxEventP…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1149.
+- commits: 8 [5f19cc7, a60d4a8, 1d9e4b2, 69a358f, ec82e71, 66b7c88, c015ebe, 4153685]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 8 [ADDED=2, MODIFIED=6; +649/-18]. Sample: ADDED `docs/superpowers/plans/2026-06-05-outbox-relocate.md` +462/-0; ADDED `docs/superpowers/specs/2026-06-05-outbox-relocate-design.md` +136/-0; MODIFIED `module-core/src/main/kotlin/maple/expectation/core/port/out/CalculationJobPort.kt` +0/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1154 — docs(897): port audit spec + ADR + implementation plan
 - author zbnerd; closed; created 2026-06-05T04:49:31Z; closed 2026-06-05T04:49:42Z; merged yes/2026-06-05T04:49:42Z; merge commit ed74670bee692897c27dae3a548c3c112806f368. Body: ## Summary Issue #897: module-core의 49개 아웃바운드 포트를 어댑터 개수 기준으로 감사/분류. **조사 결과 (issue body 보정 포함):** - 총 49개 (audit-verified, issue …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1154.
+- commits: 1 [ea19af3]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=3; +591/-0]. Sample: ADDED `docs/01_ADR/ADR-391-outbound-port-seam-classification.md` +94/-0; ADDED `docs/superpowers/plans/2026-06-05-897-port-audit.md` +339/-0; ADDED `docs/superpowers/specs/2026-06-05-897-port-audit-design.md` +158/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1155 — docs: ADR-050 module-infra decomposition roadmap (#907)
 - author zbnerd; closed; created 2026-06-05T04:49:35Z; closed 2026-06-05T04:49:53Z; merged yes/2026-06-05T04:49:53Z; merge commit 2526bde04c5149513e6b837989397d067f4b7d20. Body: ## Summary - Adds `docs/01_ADR/ADR-050-module-infra-decomposition-roadmap.md` - Design-only deliverable for #907 (no code changes)…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1155.
+- commits: 1 [32a1463]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +214/-0]. Sample: ADDED `docs/01_ADR/ADR-050-module-infra-decomposition-roadmap.md` +214/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1156 — docs(1153): GameCharacterPort 미완성 추출 조사 보고 (ADR-392)
 - author zbnerd; closed; created 2026-06-05T04:56:37Z; closed 2026-06-05T04:57:14Z; merged yes/2026-06-05T04:57:14Z; merge commit 606f2e5f7eec810fe5b217507b8e9558d0b38c35. Body: ## Summary Issue #1153 조사 결과: `GameCharacterPort` 는 미완성 추출 (Issue #464, commit 3d0911f62). 인터페이스만 `core/port/out/` 으로 이동, 어댑터 작성 없…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1156.
+- commits: 1 [89de860]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 1 [ADDED=1; +111/-0]. Sample: ADDED `docs/01_ADR/ADR-392-gamecharacter-port-incomplete-extraction.md` +111/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1157 — feat(concurrency): introduce 6 single-purpose adapters (Phase 1)
 - author zbnerd; closed; created 2026-06-05T13:22:39Z; closed 2026-06-06T06:06:45Z; merged yes/2026-06-06T06:06:45Z; merge commit dab6cdab9de5a711a496f1467b0fe3432117ea38. Body: ## Summary Introduces `module-infra/concurrency/` package with six single-purpose adapters: Adapter Concern PRs Sealed --------- -…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1157.
+- commits: 9 [7ef68ff, 09977b2, 486e12a, 094080b, 2b737c2, bc9e948, d1675dc, ab36b18, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 19 [ADDED=17, MODIFIED=2; +419/-0]. Sample: MODIFIED `.claude/rules/async-concurrency.md` +19/-0; MODIFIED `module-infra/build.gradle` +1/-0; ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/AsyncGuard.kt` +37/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1158 — docs(adr): ADR-722 package naming policy + ADR-050 post-EPIC-4 update
 - author zbnerd; closed; created 2026-06-05T13:29:37Z; closed 2026-06-06T06:06:57Z; merged yes/2026-06-06T06:06:57Z; merge commit 01ad482e576a01ef142830174be448abe3aa55e7. Body: ## Summary - **ADR-722**: `infrastructure/{domain}/{role}/` package naming policy. Bans version suffixes, flat entity packages, JP…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1158.
+- commits: 1 [97f30c9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 2 [ADDED=1, MODIFIED=1; +125/-0]. Sample: MODIFIED `docs/01_ADR/ADR-050-module-infra-decomposition-roadmap.md` +31/-0; ADDED `docs/01_ADR/ADR-722_infrastructure-package-naming-policy.md` +94/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1159 — feat(core): add Chunk stage port interfaces (PR1)
 - author zbnerd; closed; created 2026-06-06T03:13:33Z; closed 2026-06-06T06:07:14Z; merged yes/2026-06-06T06:07:14Z; merge commit 565c84e827522334908cdd8dbcd82edb66adcc24. Body: ## Summary Introduces `module-core/domain/chunk/`: - `Chunk<T>` data class with `input` + `data` + `metadata` - `ChunkProcessInput…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1159.
+- commits: 5 [526c770, 4b5f3d7, a62ed0d, e3450ca, c297460]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 14 [ADDED=8, MODIFIED=5, RENAMED=1; +136/-2]. Sample: MODIFIED `module-core/build.gradle` +4/-0; ADDED `module-core/src/main/kotlin/maple/core/domain/chunk/Chunk.kt` +7/-0; RENAMED `module-core/src/main/kotlin/maple/core/domain/chunk/ChunkProcessInput.kt` +1/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1160 — refactor(core): delete 6 dead Like port hypothetical seams (#897)
 - author zbnerd; closed; created 2026-06-06T04:22:10Z; closed 2026-06-06T06:07:29Z; merged yes/2026-06-06T06:07:29Z; merge commit 2809de25cf40531332b594bed8747b68e1b5c414. Body: ## Summary Closes #897 partial Removes 6 unused outbound port interfaces in module-core that were dead hypothetical seams (zero ad…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1160.
+- commits: 13 [6c5ab88, 50a1813, 8d68af9, b914ed9, a3341ab, 755bd82, f981ad9, c70cb8b, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 15 [ADDED=3, MODIFIED=6, REMOVED=6; +651/-356]. Sample: MODIFIED `docs/superpowers/plans/2026-06-05-897-port-audit.md` +2/-0; MODIFIED `docs/superpowers/plans/2026-06-05-port-abstraction-cleanup.md` +2/-0; ADDED `docs/superpowers/plans/2026-06-06-like-port-merge.md` +333/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1169 — docs(spec): module-executor extraction spec (#907.1, ADR-050 PR1)
 - author zbnerd; closed; created 2026-06-06T05:37:46Z; closed 2026-06-06T06:12:48Z; merged yes/2026-06-06T06:12:48Z; merge commit 35df34f7132edebecd02903e3964515a342b48a3. Body: ## Summary Closes part of #907 Adds the detailed extraction spec for `module-executor` — the 1순위 sub-module from ADR-050 (module-i…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 문서화.
+- reviews/discussion: 1 reviews [COMMENTED=1]; 2 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1169.
+- commits: 3 [6c5ab88, 50a1813, 47c20f5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=3; +577/-0]. Sample: ADDED `docs/superpowers/specs/2026-06-06-907-module-executor-extraction-design.md` +277/-0; ADDED `docs/superpowers/specs/2026-06-06-chunk-stage-ports-design.md` +161/-0; ADDED `docs/superpowers/specs/2026-06-06-like-port-merge-design.md` +139/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 문서화.
 
 ### PR #1170 — refactor(1069): extract CalculatorEngineAutoConfiguration facade
 - author zbnerd; closed; created 2026-06-06T05:50:30Z; closed 2026-06-06T06:12:24Z; merged yes/2026-06-06T06:12:24Z; merge commit 39e7752830d67823c618e665d3208ebd0059cf20. Body: ## Summary - Add `CalculatorEngineAutoConfiguration` in `module-infra/.../config/` (17 `@Import` entries) - Reduce `CalculatorEngi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1170.
+- commits: 5 [a510004, f461fae, 799b74b, 3e37504, 3c0e06f]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=3, MODIFIED=4; +602/-112]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1069-calc-engine-autoconfig.md` +305/-0; ADDED `docs/superpowers/specs/2026-06-06-1069-calc-engine-autoconfig-design.md` +150/-0; MODIFIED `docs/superpowers/specs/2026-06-06-like-port-merge-design.md` +67/-76. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1171 — refactor(synchronizer): ChunkExecutionStatus sealed class (#960)
 - author zbnerd; closed; created 2026-06-06T09:00:46Z; closed 2026-06-06T09:00:57Z; merged yes/2026-06-06T09:00:57Z; merge commit 0dc0042596e05392660ba2bf15e3477510a6d84a. Body: Implements #960. Replace enum with sealed class (Pending, Processing, Succeeded, FailedRetryable, FailedTerminal). State-level sho…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1171.
+- commits: 18 [6c5ab88, 50a1813, 03b3469, 1c186ce, 6bbac2a, c2eaa64, d88f12a, 8aa3d24, … +10]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 16 [ADDED=10, MODIFIED=5, REMOVED=1; +2468/-50]. Sample: ADDED `docs/superpowers/plans/2026-06-06-chunk-consumer-template-state-machine.md` +580/-0; ADDED `docs/superpowers/plans/2026-06-06-chunk-execution-status-sealed.md` +646/-0; ADDED `docs/superpowers/plans/2026-06-06-urgent-read-state-sealed.md` +354/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1172 — refactor(rest): UrgentReadState sealed class with behavior (#959)
 - author zbnerd; closed; created 2026-06-06T09:04:48Z; closed 2026-06-06T09:04:59Z; merged yes/2026-06-06T09:04:59Z; merge commit 280329c29603f5fece239eaf042bd1e56af08aba. Body: Implements #959. Sealed class replaces enum. Behavior methods on subtypes. JSON contract preserved.
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1172.
+- commits: 12 [6c5ab88, 50a1813, 03b3469, 1c186ce, 6bbac2a, c2eaa64, d88f12a, 8aa3d24, … +4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=9, MODIFIED=3; +2401/-15]. Sample: ADDED `docs/superpowers/plans/2026-06-06-chunk-consumer-template-state-machine.md` +580/-0; ADDED `docs/superpowers/plans/2026-06-06-chunk-execution-status-sealed.md` +646/-0; ADDED `docs/superpowers/plans/2026-06-06-urgent-read-state-sealed.md` +354/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1173 — refactor(synchronizer): convert FailureDecision to sealed class (#983)
 - author zbnerd; closed; created 2026-06-06T09:16:27Z; closed 2026-06-06T09:19:02Z; merged no; merge commit —. Body: ## Summary Convert `FailureDecision` from a private data class with nullable `terminalReason` to a sealed class with `Retryable` a…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: closed, not merged; no application claim. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1173.
+- commits: 20 [6c5ab88, 50a1813, 03b3469, 1c186ce, 6bbac2a, c2eaa64, d88f12a, 8aa3d24, … +12]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 22 [ADDED=10, MODIFIED=11, REMOVED=1; +2558/-96]. Sample: ADDED `docs/superpowers/plans/2026-06-06-chunk-consumer-template-state-machine.md` +580/-0; ADDED `docs/superpowers/plans/2026-06-06-chunk-execution-status-sealed.md` +646/-0; ADDED `docs/superpowers/plans/2026-06-06-urgent-read-state-sealed.md` +354/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: closed without merge; evidence is not treated as applied. Portfolio: 설계.
 
 ### PR #1174 — refactor(synchronizer): convert FailureDecision to sealed class (#983)
 - author zbnerd; closed; created 2026-06-06T09:19:04Z; closed 2026-06-06T09:19:12Z; merged yes/2026-06-06T09:19:12Z; merge commit 6bae30f56e81380339e0c3e261f43b9bbf6000df. Body: ## Summary Convert `FailureDecision` from a private data class with nullable `terminalReason` to a sealed class with `Retryable` a…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1174.
+- commits: 1 [981f6b4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [MODIFIED=5; +90/-53]. Sample: MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplate.kt` +71/-42; MODIFIED `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplateTest.kt` +3/-1; MODIFIED `module-synchronizer/src/test/kotlin/maple/synchronizer/processor/DefaultChunkProcessorTest.kt` +7/-5. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1175 — refactor: #1098 ChunkConsumerTemplate cleanup + #1093 magic numbers (#1098 #1093)
 - author zbnerd; closed; created 2026-06-06T11:14:09Z; closed 2026-06-06T11:15:01Z; merged yes/2026-06-06T11:15:01Z; merge commit b766ede36794dbbea661ad6df288b3a63160ca08. Body: Resolves two clean-code issues across the four active service modules. ## #1098 — ChunkConsumerTemplate failure classification - R…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1175.
+- commits: 17 [37b8257, 39df6b8, 15df4c3, 4f745cc, 3918b5f, ed3feed, 116638c, 653d7ae, … +9]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 30 [ADDED=3, MODIFIED=27; +419/-49]. Sample: ADDED `docs/superpowers/specs/2026-06-06-1090-synchronizer-infra-extraction-design.md` +116/-0; ADDED `docs/superpowers/specs/2026-06-06-1093-magic-numbers-design.md` +140/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` +4/-1. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1176 — refactor: 6 extraction refactors — batch 1 (#1083 #1080 #1074 #1061 #1087 #1084)
 - author zbnerd; closed; created 2026-06-06T13:33:18Z; closed 2026-06-06T13:39:33Z; merged yes/2026-06-06T13:39:33Z; merge commit 9f6a93f1de3cd633a851e13fe78220a5d9b6e4f3. Body: Resolves six ready-for-agent extraction refactors across the four active service modules. ## #1083 — Rest-Controller: PopularChara…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1176.
+- commits: 25 [4638af8, 1457325, 802b856, 3bb6930, 5841aef, 07a1c28, 79e5e10, abcd177, … +17]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 37 [ADDED=23, MODIFIED=14; +2291/-394]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1061-sink-event-publisher.md` +160/-0; ADDED `docs/superpowers/plans/2026-06-06-1074-batch-resolver-extraction.md` +135/-0; ADDED `docs/superpowers/plans/2026-06-06-1080-snapshot-chunk-processor-parser.md` +314/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1177 — refactor: #1071 dead dependencies + #1086 RuleBasedAnalyzer extraction
 - author zbnerd; closed; created 2026-06-06T13:59:10Z; closed 2026-06-06T13:59:22Z; merged yes/2026-06-06T13:59:22Z; merge commit a2bcd214242ed97bdd23b4d683916051f0d72e6c. Body: Resolves two ready-for-agent refactors in module-infra (and small touches in module-calculator / module-rest-controller). ## #1071…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1177.
+- commits: 7 [70b7e26, 2a6fd22, 01b1590, 766e7e7, 77f5a4a, 6863cc5, deb5e68]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [ADDED=3, MODIFIED=6; +433/-68]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1071-remove-dead-dependencies.md` +194/-0; ADDED `docs/superpowers/plans/2026-06-06-1086-rule-based-analyzer.md` +184/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/processor/CalculationCache.kt` +0/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1178 — refactor(synchronizer): split SynchronizerMetrics into meter registry + recording (#1066)
 - author zbnerd; closed; created 2026-06-06T16:27:49Z; closed 2026-06-06T16:37:55Z; merged yes/2026-06-06T16:37:55Z; merge commit c6a0c724a228b718d4584b2e1b828a69af6d536d. Body: Decomposes `SynchronizerMetrics` (176 lines) into: - `SynchronizerMeterRegistry` (NEW, 117 lines) — owns all 19 meter declarations…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1178.
+- commits: 8 [37b8257, 613f930, 2ded3fc, cc402c9, 336d4b5, fb5f068, ca4a333, 3991c75]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 7 [ADDED=5, MODIFIED=2; +1008/-137]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1066-synchronizer-metrics-split.md` +423/-0; ADDED `docs/superpowers/specs/2026-06-06-1066-synchronizer-metrics-split-design.md` +180/-0; ADDED `docs/superpowers/specs/2026-06-06-1090-synchronizer-infra-extraction-design.md` +116/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1179 — refactor(synchronizer): #1088 decompose flat consumers
 - author zbnerd; closed; created 2026-06-06T16:33:31Z; closed 2026-06-06T16:36:13Z; merged yes/2026-06-06T16:36:13Z; merge commit e76f4a50d2d951b987ab7a4e06307ec3c045addf. Body: ## Summary - Extract `OcidLookupService` from `OcidLookupRunConsumer` (endpoint filter + file read + batch upsert + Redis write + …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1179.
+- commits: 13 [37b8257, 488c722, f30c0ba, 5b0152e, 809ba34, 79518f9, d4cafe9, e1fb85a, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [ADDED=9, MODIFIED=4; +1500/-183]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1088-flat-consumer-decomposition.md` +767/-0; ADDED `docs/superpowers/specs/2026-06-06-1088-flat-consumer-decomposition-design.md` +201/-0; ADDED `docs/superpowers/specs/2026-06-06-batch-read-orchestration-extraction-design.md` +102/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1180 — refactor(988): decompose SnapshotChunkProcessor into parser + pipeline
 - author zbnerd; closed; created 2026-06-06T16:43:31Z; closed 2026-06-06T16:48:00Z; merged yes/2026-06-06T16:48:00Z; merge commit 0d7f9ddca8f62d319638371eef28beca971bf55c. Body: ## Summary Decompose `SnapshotChunkProcessor.process()` (177 lines, 8 deps, 3 responsibilities) into: - **`SnapshotChunkParser`** …
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1180.
+- commits: 9 [ebd5074, e26774e, ce3a302, ecdffe1, 6b8b5b6, 4a76e81, 9a6d45a, c411320, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 11 [ADDED=7, MODIFIED=3, REMOVED=1; +1440/-144]. Sample: ADDED `docs/superpowers/plans/2026-06-06-988-snapshot-chunk-decomposition.md` +813/-0; ADDED `docs/superpowers/specs/2026-06-06-988-snapshot-chunk-processor-decomposition-design.md` +253/-0; MODIFIED `module-calculator/build.gradle` +1/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1181 — refactor(rest-controller): #1081 decompose ReadModelQueryService.batchQuery
 - author zbnerd; closed; created 2026-06-06T16:58:59Z; closed 2026-06-06T16:59:10Z; merged yes/2026-06-06T16:59:10Z; merge commit e5413c2537110653572854e7831ee9d8a9a5df42. Body: ## Summary - Extract `ReadModelRowQuery` (object): dynamic SQL + `MapSqlParameterSource` builder - Extract `StalenessCheck` (objec…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1181.
+- commits: 12 [c4001c8, 47d5028, 99393d5, 7eb7fa4, cf48f90, bef2a62, f8a3e2e, 78de9d2, … +4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 12 [ADDED=9, MODIFIED=3; +2762/-61]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1081-readmodel-query-decomposition.md` +518/-0; ADDED `docs/superpowers/plans/2026-06-06-batch-read-orchestration-extraction.md` +1724/-0; ADDED `docs/superpowers/specs/2026-06-06-1081-readmodel-query-decomposition-design.md` +235/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1182 — refactor(1073): extract CalculationDispatchService (step 1/2)
 - author zbnerd; closed; created 2026-06-06T17:10:21Z; closed 2026-06-06T17:10:46Z; merged yes/2026-06-06T17:10:46Z; merge commit 2cf2e36b2b03906ecf7253c8ab67e90db5bcc052. Body: ## Summary Extract 6 PGMQ-dispatch methods from `CalculationJobService` into a new `CalculationDispatchService` (step 1 of 2). `Ca…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1182.
+- commits: 5 [a369ceb, d7eb0b6, b047923, 52eb583, 6bafcec]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 6 [ADDED=4, MODIFIED=2; +1281/-186]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1073-calculation-dispatch-extraction.md` +722/-0; ADDED `docs/superpowers/specs/2026-06-06-1073-calculation-dispatch-service-design.md` +216/-0; ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/CalculationDispatchService.kt` +111/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1183 — refactor: #986 + #991 + #961 + #1082 — ext-api phase split, Clock injection, rest-controll…
 - author zbnerd; closed; created 2026-06-07T05:51:11Z; closed 2026-06-07T05:51:24Z; merged yes/2026-06-07T05:51:24Z; merge commit d8314f714848b914ca8da00f60727b1baee06070. Body: Resolves four ready-for-agent refactors across module-external-api and module-rest-controller. ## #986 — SnapshotFetchPhase endpoi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1183.
+- commits: 24 [8976fca, 0825f70, 88da03f, feecfc0, 38f32fa, 1551393, 81cd30d, bd9af91, … +16]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 31 [ADDED=12, MODIFIED=18, REMOVED=1; +1613/-483]. Sample: ADDED `docs/superpowers/plans/2026-06-06-1082-batch-scheduler-orchestration.md` +208/-0; ADDED `docs/superpowers/plans/2026-06-06-961-instant-clock-migration.md` +150/-0; ADDED `docs/superpowers/plans/2026-06-06-986-snapshot-fetch-phase-split.md` +239/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1184 — refactor: #985 + #1060 + #1089 — ChunkExecutionStateMachine, ReadModelCacheService split, …
 - author zbnerd; closed; created 2026-06-07T08:06:47Z; closed 2026-06-07T08:07:00Z; merged yes/2026-06-07T08:07:00Z; merge commit cc60d43e28fa8a2cf688728005d887dd0caf1712. Body: Resolves three ready-for-agent refactors across module-synchronizer and module-rest-controller. ## #985 — ChunkExecutionStateMachi…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1184.
+- commits: 8 [b5e6f1c, 7e5759a, 62a0fd5, 65eba9a, ab5f41a, 6b30104, 0be7ab8, 68af5c4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 19 [ADDED=5, MODIFIED=14; +481/-272]. Sample: MODIFIED `module-rest-controller/src/main/kotlin/maple/restcontroller/config/V6ReadConfig.kt` +26/-6; MODIFIED `module-rest-controller/src/main/kotlin/maple/restcontroller/controller/ExpectationV6Controller.kt` +16/-4; MODIFIED `module-rest-controller/src/main/kotlin/maple/restcontroller/read/BatchResolver.kt` +7/-5. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1185 — refactor(external-api): #987 extract SnapshotSinkEventPublisher from ChunkedSnapshotSink
 - author zbnerd; closed; created 2026-06-07T10:02:13Z; closed 2026-06-07T10:10:24Z; merged yes/2026-06-07T10:10:24Z; merge commit 9596d4722f4013281f8461505b2814f4400be58e. Body: Moves event DTO construction, volume metrics, and the snapshotVolume log line from `ChunkedSnapshotSink` into a new `SnapshotSinkE…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1185.
+- commits: 13 [bd2a720, 622e736, 80ba67f, c60bc02, ca92478, 81bf174, 214222c, 2886b4e, … +5]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 8 [ADDED=4, MODIFIED=4; +1160/-71]. Sample: ADDED `docs/superpowers/plans/2026-06-07-snapshot-sink-event-publisher.md` +764/-0; ADDED `docs/superpowers/specs/2026-06-07-snapshot-sink-event-publisher-design.md` +142/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhase.kt` +6/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1186 — refactor(1085): extract OcidResolutionOrchestrator + ApiDataFetchOrchestrator from Calcula…
 - author zbnerd; closed; created 2026-06-07T10:12:59Z; closed 2026-06-07T10:13:18Z; merged yes/2026-06-07T10:13:18Z; merge commit 24e80a870d794d067fb61cc6013f4030f44c74e0. Body: Resolves #1085 (step 2/2 of #1073). ## What Extract two new orchestrators from `CalculationJobService`: - **`OcidResolutionOrchest…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 0 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1186.
+- commits: 7 [61c8670, 49abceb, 2f1eb9a, 2abd505, 0c2105f, ce5a3f3, cbe3a09]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 9 [ADDED=4, MODIFIED=5; +425/-132]. Sample: ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/ApiDataFetchOrchestrator.kt` +83/-0; MODIFIED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/CalculationJobService.kt` +0/-102; ADDED `module-infra/src/main/kotlin/maple/expectation/infrastructure/job/OcidResolutionOrchestrator.kt` +55/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1187 — refactor(synchronizer): add ChunkPipelineOrchestrator (PR2 of #990)
 - author zbnerd; closed; created 2026-06-07T10:18:13Z; closed 2026-06-07T10:20:06Z; merged yes/2026-06-07T10:20:06Z; merge commit 7ef9a247726219cc588db8dbac044a7b473a822d. Body: ## Summary - New `ChunkPipelineOrchestrator` in `module-synchronizer/adapter/chunk/` (TDD, 7 unit tests covering happy path, stage…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1187.
+- commits: 4 [702a04d, 84e8aaa, 169bf52, 0134f3a]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 5 [ADDED=3, MODIFIED=2; +357/-124]. Sample: ADDED `docs/01_ADR/ADR-026-chunk-pipeline-orchestrator.md` +83/-0; ADDED `module-synchronizer/src/main/kotlin/maple/synchronizer/adapter/chunk/ChunkPipelineOrchestrator.kt` +53/-0; MODIFIED `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/DefaultChunkProcessor.kt` +14/-28. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1190 — refactor: #992 — split SynchronizerMetrics by domain (ChunkExecution, DocumentVolume)
 - author zbnerd; closed; created 2026-06-07T10:47:44Z; closed 2026-06-07T11:07:45Z; merged yes/2026-06-07T11:07:45Z; merge commit 4a5590c030f85779a2fb9fea0b2848b1bc6e42d2. Body: ## Issue Closes #992 ## Summary Split `SynchronizerMetrics` (70 lines, 22 methods, 5 domains) into 3 cohesive `@Component` classes…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1190.
+- commits: 12 [8ecad90, ee39021, 31ef6b1, 173d2c3, 005eccb, bcfced4, 005cc71, 433d8e2, … +4]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 13 [ADDED=7, MODIFIED=6; +1344/-80]. Sample: ADDED `docs/superpowers/plans/2026-06-07-synchronizer-metrics-domain-split.md` +672/-0; ADDED `docs/superpowers/specs/2026-06-07-989-chunk-file-manager-extraction-design.md` +222/-0; ADDED `docs/superpowers/specs/2026-06-07-synchronizer-metrics-domain-split-design.md` +158/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1191 — refactor(1057): BatchProgress + EndpointSinkFactory in external-api phases
 - author zbnerd; closed; created 2026-06-07T10:49:04Z; closed 2026-06-07T10:49:14Z; merged yes/2026-06-07T10:49:14Z; merge commit ae4bc4a6229d16381e36f91b2c9d4cceabad90a6. Body: Resolves #1057 (scope narrowed — `SnapshotFetchPhase` was dropped in #986 / PR #1183). ## What ### BatchProgress — shared batch st…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1191.
+- commits: 9 [0f0035a, 11031c5, 20f6a86, 71d020e, 9529cc5, dc04670, cffa422, 612d15a, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 10 [ADDED=3, MODIFIED=6, REMOVED=1; +179/-115]. Sample: MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchFetchSupport.kt` +9/-11; ADDED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchProgress.kt` +28/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhase.kt` +3/-25. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1192 — refactor: #989 extract ChunkFileManager from ChunkedSnapshotSink
 - author zbnerd; closed; created 2026-06-07T11:04:31Z; closed 2026-06-07T11:04:53Z; merged yes/2026-06-07T11:04:53Z; merge commit f83322b0db7e88e60dee279b5d36e7830b2b726f. Body: ## Summary - Issue #989: extract file I/O + chunk rotation from ChunkedSnapshotSink into new ChunkFileManager class - Sink reduces…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1192.
+- commits: 2 [307b8ab, aeb146d]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=1, MODIFIED=2; +141/-99]. Sample: ADDED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` +120/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` +13/-96; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/snapshot/EndpointSinkFactory.kt` +8/-3. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1193 — feat(external-api): add FetchProgressTracker wrapping BatchProgress (#1062)
 - author zbnerd; closed; created 2026-06-07T11:32:00Z; closed 2026-06-07T11:34:47Z; merged yes/2026-06-07T11:34:47Z; merge commit 7ea9ab9fa55ca933bde877d39ecca3ebe0e2f1f3. Body: ## Summary Adds `FetchProgressTracker` per issue #1062 spec. The foundational work (BatchProgress data class + EndpointSinkFactory…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 기능.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1193.
+- commits: 2 [0a1a47b, be720a2]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 3 [ADDED=3; +201/-0]. Sample: ADDED `docs/01_ADR/ADR-027-batch-progress-sink-factory.md` +91/-0; ADDED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/FetchProgressTracker.kt` +49/-0; ADDED `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/FetchProgressTrackerTest.kt` +61/-0. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 기능.
 
 ### PR #1194 — refactor(966): decompose SchedulerPhaseUtils God Object into 6 single-responsibility compo…
 - author zbnerd; closed; created 2026-06-07T11:36:22Z; closed 2026-06-07T11:36:45Z; merged yes/2026-06-07T11:36:45Z; merge commit 3dfa32898d8db91d1f355cb38bef0110cae90d63. Body: Resolves #966. ## What `SchedulerPhaseUtils` (internal object with 6 distinct responsibilities + 6 `Instant.now()` calls + filesys…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1194.
+- commits: 15 [e59cded, 118271f, 53357a3, 82ae297, 101afd0, d628d43, fe6c5b0, f0452a4, … +7]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 22 [ADDED=13, MODIFIED=7, REMOVED=2; +1301/-134]. Sample: ADDED `docs/superpowers/plans/2026-06-06-966-scheduler-phase-utils-decomposition.md` +712/-0; ADDED `docs/superpowers/specs/2026-06-06-966-scheduler-phase-utils-decomposition-design.md` +268/-0; MODIFIED `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchFetchSupport.kt` +7/-4. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #1195 — refactor(cleanup): port cleanup schedulers from ext/calc to Airflow + module-cleanup
 - author zbnerd; closed; created 2026-06-07T17:38:33Z; closed 2026-06-07T17:40:29Z; merged yes/2026-06-07T17:40:29Z; merge commit 5bec31f43bb52534a9ee3104a5dd816239bb5b90. Body: ## Summary - New `module-cleanup` Spring Boot app (:8084) hosts all cleanup logic + 3 HTTP endpoints (`/api/internal/cleanup/{runs…
-- Reviews/discussion, connected commit SHAs, GitHub closing links, and file metadata: inaccessible for this record in the aggregate GraphQL retrieval (HTTP 502); not inferred.
-- Actual: merged by GitHub metadata; detailed file evidence unavailable. Portfolio: 설계.
+- reviews/discussion: 0 reviews [none]; 0 review comments; 1 conversation comments. Complete IDs, timestamps, and body hashes: [machine-readable companion](./pr_detail_inventory.jsonl), PR #1195.
+- commits: 9 [f7e7d70, 18dc681, 2f16534, a23a499, 1381703, 150fd7a, 54a367d, 2542e4c, … +1]; linked issues: 0 [none]. All 40-character connected SHAs and formal `closingIssuesReferences`: [machine-readable companion](./pr_detail_inventory.jsonl).
+- file evidence: 26 [ADDED=15, MODIFIED=4, REMOVED=6, RENAMED=1; +2056/-594]. Sample: ADDED `airflow/dags/cleanup_pipeline.py` +57/-0; ADDED `docs/superpowers/plans/2026-06-07-cleanup-airflow-port.md` +1347/-0; MODIFIED `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` +1/-2. Complete paginated paths/counts: [machine-readable companion](./pr_detail_inventory.jsonl).
+- Actual: merged by GitHub metadata; paginated file/commit/discussion evidence above. Portfolio: 설계.
 
 ### PR #721 — DOCS: V5 Query-Only 서버 분리 아키텍처 다이어그램
 - author zbnerd; MERGED; created 2026-04-19T06:52:25Z; closed 2026-04-19T06:52:34Z; merged yes/2026-04-19T06:52:34Z; merge commit c95293b54d2fdb37996f0657ba0a463f2900250e. Body: ## Summary - Query-Only 서버 분리 시 아키텍처 분석 다이어그램 - 현재 모놀리식 구조 vs 분리 후 구조 비교 - Query Server / Calculatio…

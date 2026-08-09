@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12,<3.13"
+# dependencies = ["reportlab==5.0.0"]
+# ///
 """Render the completed Korean Markdown resume and portfolio as A4 PDFs.
 
 The originals are hash-checked and never opened for writing. The renderer
@@ -36,11 +40,8 @@ from reportlab.platypus import (
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 FINAL_DIR = ROOT / "docs/Portfolio_Book/output/final"
-FONT_CANDIDATES = (
-    pathlib.Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
-    pathlib.Path("/usr/share/fonts/opentype/unifont/unifont.otf"),
-    pathlib.Path("/usr/share/fonts/truetype/unifont/unifont_sample.ttf"),
-)
+FONT_PATH = pathlib.Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc")
+FONT_SHA256 = "79c18ebe7b811951e8311bad7103ebeae8c337ed9988ea69e8a78a66cfe029b9"
 
 ORIGINAL_HASHES = {
     "docs/Portfolio_Book/2026년 이력서 포트폴리오 리뉴얼.pdf": "e67b747879168c5864eef1ea85cde54a658c0ea42f58d08e5ef752b706a59a7b",
@@ -92,11 +93,18 @@ def verify_originals() -> None:
 
 
 def register_font() -> str:
-    font_path = next((path for path in FONT_CANDIDATES if path.is_file()), None)
-    if font_path is None:
-        raise RuntimeError("No Korean-capable font found; checked: " + ", ".join(map(str, FONT_CANDIDATES)))
+    if not FONT_PATH.is_file():
+        raise RuntimeError(
+            "Pinned Korean font is missing: " + str(FONT_PATH)
+            + ". Install the WenQuanYi Zen Hei font package before rendering."
+        )
+    actual_hash = file_sha256(FONT_PATH)
+    if actual_hash != FONT_SHA256:
+        raise RuntimeError(
+            f"Pinned Korean font hash mismatch: expected {FONT_SHA256}, got {actual_hash}"
+        )
     name = "PortfolioKorean"
-    pdfmetrics.registerFont(TTFont(name, str(font_path)))
+    pdfmetrics.registerFont(TTFont(name, str(FONT_PATH)))
     pdfmetrics.registerFontFamily(name, normal=name, bold=name, italic=name, boldItalic=name)
     return name
 
@@ -462,6 +470,7 @@ def build_document(kind: str, source: pathlib.Path, target: pathlib.Path, font_n
         subject="Evidence-backed backend resume and portfolio",
         creator="Codex-assisted ReportLab renderer",
         pageCompression=1,
+        invariant=1,
     )
 
     def footer(canvas, document) -> None:

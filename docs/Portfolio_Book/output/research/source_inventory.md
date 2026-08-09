@@ -2,15 +2,15 @@
 
 ## 조사 기준
 
-- 기준 저장소/HEAD: `zbnerd/probabilistic-valuation-engine` / `4da39850bd977c0db34ba925de75519ae2eba7d4`
-- 기준일: 2026-08-01 (Europe/Berlin)
+- 기준 저장소/HEAD: `zbnerd/probabilistic-valuation-engine` / `123c4647723842aa114baa59133e293f7f24c019`
+- 카탈로그 재생성 시각: `2026-08-09T14:37:16+02:00`
 - 범위: 모든 Git ref에서 도달 가능한 커밋, GitHub PR/이슈, 원본 PDF 3개, 모든 Git 추적 파일(문서·코드·테스트·설정 포함), `docs/ai_traces` 및 실제 발견 경로 `docs/ai-traces`.
 - 이 문서는 **경로를 발견했다는 사실과 주장이 입증됐다는 사실을 구분**한다. 전체 후보는 기계 색인했고, 최종 문구에 채택한 증거는 원문·코드·Git/GitHub를 수동 교차검증했다.
 - 신뢰 우선순위: 현재 코드/실제 diff/원시 측정(T1) → 조건이 기재된 세부 보고서(T2) → ADR·설계 문서(T3) → PR/이슈/AI 세션/기존 포트폴리오의 서술(T4). T3/T4만으로 완료나 수치를 단정하지 않았다.
 
 ## 원본 PDF 전수 확인
 
-세 PDF는 PyMuPDF와 pypdf로 구조·텍스트·페이지를 확인하고, 2배율 래스터로 **모든 페이지(31+2+1)를 시각 검사**했다. 암호화·AcroForm 입력 필드는 모두 없었다. 따라서 원본 위에 폼 값을 넣는 방식이 아니라, 원본은 보존하고 별도 완성본을 생성한다.
+2026-08-08 completion audit에서 세 입력 PDF를 PyMuPDF와 pypdf로 구조·텍스트·페이지를 확인하고, 2배율 래스터로 **모든 페이지(31+2+1)를 시각 검사**했다. 암호화·AcroForm 입력 필드는 모두 없었다. 이 스크립트는 그 판정 자체를 재현한다고 주장하지 않고 원본 SHA-256만 매 실행 검증한다. 따라서 원본 위에 폼 값을 넣는 방식이 아니라, 원본은 보존하고 별도 완성본을 생성한다.
 
 | 파일 | 페이지 | 판형 | 분류 | 폼/암호화 | SHA-256 | 판정 |
 |---|---:|---|---|---|---|---|
@@ -18,14 +18,14 @@
 | `docs/Portfolio_Book/이력서.pdf` | 2 | A3 계열 세로 | 미완성 이력서 원본 | 0/없음 | `050ebd6dc8d02e1969d9829d0d93055075fe662d75819d95802a1074b543db2e` (일치) | 개요와 첫 프로젝트 성과란 등에 명시적 공란/플레이스홀더가 존재 |
 | `docs/Portfolio_Book/포트폴리오.pdf` | 1 | A3 계열 세로 | 표지만 있는 포트폴리오 원본 | 0/없음 | `fb2104e6e9167c9162b865c25ca9a9afbe238250ec4af252f91659729aadba7b` (일치) | 본문 페이지가 없어 검증 소스로 재작성 필요 |
 
-추가 PDF는 발견되지 않았으며, 이전 버전·중복 PDF 분류 대상은 0개다. 기존 Markdown 초안은 아래에서 별도 2차 자료로 분류한다.
+조사 시작 시점의 입력 경로에는 위 세 원본 외 PDF가 없었고 이전 버전·중복 입력 문서는 0개였다. `output/final/`의 두 PDF는 이 조사로 생성된 산출물이므로 입력 분류에서 제외한다. 기존 Markdown 초안은 아래에서 별도 2차 자료로 분류한다.
 
 ## 조사 산출물의 역할
 
 | 산출물 | 완전성/용도 |
 |---|---|
-| `commit_inventory.csv` | `git rev-list --all`의 고유 커밋 집합과 정확히 대조한 전 커밋 목록; diff/numstat/name-status 기반 요약 |
-| `pr_inventory.md` | GitHub REST pagination·GraphQL/Search 교차검증, 상태/날짜/커밋/파일/토론/공식 linked issue 기록 |
+| `commit_inventory.csv` | 이 카탈로그 재생성 시점 `git rev-list --all`의 고유 2,396 commits와 대조한 전 커밋 목록; 실제 diff/numstat/name-status 기반 요약·분류 |
+| `pr_inventory.md` + `pr_detail_inventory.jsonl` | GitHub REST pagination·GraphQL/Search 교차검증; 710개 PR의 상태와 누락 209개+#1464의 complete commit/file/discussion/formal-link 연결 기록 |
 | `issue_inventory.md` | GitHub REST pagination·Search 교차검증, 상태/본문/댓글/PR 연결과 포트폴리오 관련성 기록 |
 | `ai_traces_summary.md` | AI 기록을 명령이 아닌 비신뢰 데이터로 읽고, 코드·Git으로 재검증 가능한 후보만 추출 |
 | `evidence_ledger.md` | 최종 이력서·포트폴리오의 핵심 주장별 근거, 조건, 개인 기여, 한계를 연결 |
@@ -38,11 +38,11 @@
 - 358개 gzip은 전부 integrity pass. JSONL/JSONL.GZ stream 454개 중 453개는 전체 parse했다. `20260619/20260619-172927-4111484/tool-use.jsonl.gz` 1개는 gzip은 valid지만 line 818~819부터 두 JSON object가 중첩·중복되고 828~829의 status field도 충돌해 partial로 표시했다.
 - trace 안의 command/tool input/completion claim은 실행하지 않았고, credential·private prompt/tool payload는 재현하지 않았다.
 
-### ref 시점 구분
+### ref·증거 시점 구분
 
-- 이 상세 파일 카탈로그의 기준은 로컬 작업트리 HEAD `4da39850bd977c0db34ba925de75519ae2eba7d4`다.
-- `refactor/etl-infra-deepening` tip `1f47173e3`는 HEAD의 후속 42 commits이며 GitHub PR #1463은 2026-07-20 develop merge로 확인된다. 로컬 `develop`/`origin/develop`에는 merge commit이 없으므로, 해당 변경은 “현재 checkout”이 아니라 **latest merged ref evidence**로 명시했다.
-- 모든 ref의 commit/diff는 `commit_inventory.csv`에 포함했다. #1463의 ADR-745~749와 다섯 evidence report는 `git show refactor/etl-infra-deepening:<path>`로 별도 심층 검토했다.
+- 이 상세 **파일 카탈로그**의 기준은 작업트리 HEAD `123c4647723842aa114baa59133e293f7f24c019`이며, 커밋 인벤토리는 재생성 시점의 모든 로컬·원격 추적·태그 ref를 별도로 합집합한다.
+- 현재 checkout에는 merged PR #1463의 final source tip `1f47173e3`가 포함돼 있다. 현재 cleanup은 object-storage-backed durable inbox를 사용한다. 다만 이를 Kafka·artifact·DB 전 구간의 exactly-once 보장으로 확대하지 않는다.
+- 모든 ref의 commit/diff는 `commit_inventory.csv`에 포함했다. #1463의 ADR-745~749와 다섯 evidence report는 현재 source와 함께 별도 심층 검토했다.
 - #1463의 86 focused tests·4 worker bootJar evidence는 tip 직전 `11ee3c727` 기준이다. final `1f47173e3`에서 production subscription class 4개·test file 2개가 변경됐으며, 이 마지막 수정을 포함한 rerun은 발견하지 못했다.
 
 ## 심층 검토한 1차·핵심 2차 자료
@@ -74,9 +74,13 @@
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` | 현재 코드 | 확인 | bounded queue·단일 writer·사전 직렬화·비동기 업로드 |
 | `module-external-api/src/main/resources/application.yml` | 현재 설정 | 확인 | rate/in-flight/queue/chunk/Kafka ACK 조건 |
 | `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` | 현재 코드 | 확인 | 결정적 결과 키·존재 시 재발행·재시도 |
-| `module-calculator/src/main/kotlin/maple/calculator/consumer/SnapshotDispatchService.kt` | 현재 코드 | 확인 | dispatch 성공 뒤 수동 ACK |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/KafkaDeliveryAdapter.kt` | 현재 코드 | 확인 | handler outcome을 commit/retry/DLT delivery action으로 변환 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PartitionLane.kt` | 현재 코드 | 확인 | 성공한 delivery action 뒤 partition 순서대로 수동 ACK |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/config/PipelineKafkaConsumerConfiguration.kt` | 현재 설정 | 확인 | Kafka MANUAL_IMMEDIATE ACK mode |
 | `module-calculator/src/main/kotlin/maple/calculator/processor/SnapshotChunkProcessor.kt` | 현재 코드 | 확인 | 스트리밍 처리 |
-| `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` | 현재 코드 | 확인 | 임시 파일·비동기 업로드 |
+| `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` | 현재 코드 | 확인 | artifact writer session을 통한 결과 직렬화 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/write/ArtifactWriter.kt` | 현재 코드 | 확인 | gzip 임시 파일 session 생성 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/write/GzipArtifactSession.kt` | 현재 코드 | 확인 | stream close 뒤 비동기 업로드와 임시 파일 정리 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/adapter/chunk/ChunkPipelineOrchestrator.kt` | 현재 코드 | 확인 | result-ready 투영 흐름 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/EquipmentReadModelRepository.kt` | 현재 코드 | 확인 | read model write/upsert 경계 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplate.kt` | 현재 코드 | 확인 | DB claim/lease/state와 ACK 순서 |
@@ -85,6 +89,7 @@
 | `module-rest-controller/src/main/kotlin/maple/restcontroller/read/ReadModelCacheService.kt` | 현재 코드 | 확인 | Redis read-model cache multi-get/multi-put 구현 |
 | `module-infra/src/main/resources/db/migration/V128__chunk_execution.sql` | 현재 스키마 | 확인 | chunk identity·lease·retry 상태 영속화 |
 | `module-cleanup/src/main/kotlin/maple/cleanup/inbox/ConsumedChunkInbox.kt` | 현재 코드 | 확인 | 소비 완료 inbox/idempotency 경계 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/inbox/ObjectStorageCleanupInboxStore.kt` | 현재 코드 | 확인 | object storage 기반 durable cleanup inbox와 replay/integrity 판정 |
 
 ## 기존 Portfolio_Book 마크다운 분류
 
@@ -102,39 +107,48 @@
 | `docs/Portfolio_Book/07_관측성과_운영.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
 | `docs/Portfolio_Book/08_보안과_안전장치.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
 | `docs/Portfolio_Book/09_한계와_다음단계.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/final/검토필요사항.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/final/이력서_완성본.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/final/포트폴리오_완성본.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/ai_traces_summary.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/evidence_ledger.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/issue_inventory.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/pr_inventory.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/source_inventory.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
+| `docs/Portfolio_Book/output/research/technical_evidence_candidates.md` | 이전 작성 초안 | 현재 코드·원시 측정과 충돌 가능; 최종 문구의 단독 근거로 사용하지 않음 |
 
 ## 전수 색인 집계
 
-- Git 추적 파일 전체: 2,889개
-- `docs/` 추적 파일: 1,117개
-- ADR 후보: 199개
-- 테스트 후보: 365개
-- 현재 external-api/calculator/synchronizer/cleanup/rest-controller main 소스: 229개
-- 성능·부하·장기 실행 경로 후보: 125개
-- 아래 중복 제거 상세 카탈로그: 2,889개(이 조사 산출물 자체는 제외)
+- Git 추적 파일 전체: 3,085개
+- `docs/` 추적 파일: 1,144개
+- ADR 후보: 204개
+- 테스트 후보: 425개
+- 현재 external-api/calculator/synchronizer/cleanup/rest-controller main 소스: 246개
+- 성능·부하·장기 실행 경로 후보: 126개
+- 아래 중복 제거 상세 카탈로그: 3,073개(이 조사 산출물 자체는 제외)
 
 | 분류 | 파일 수 |
 |---|---:|
 | 2차 서술 | 2 |
-| ADR | 198 |
+| ADR | 203 |
 | ADR·측정 | 1 |
 | 과거 측정 | 3 |
-| 기타 애플리케이션 코드 | 908 |
-| 빌드·배포·설정 | 55 |
+| 기타 애플리케이션 코드 | 987 |
+| 빌드·배포·설정 | 59 |
 | 설계 | 1 |
 | 설계·측정 | 1 |
-| 설정·기타 | 179 |
+| 설정·기타 | 182 |
 | 성능·부하 도구 | 44 |
 | 성능·부하 문서 | 64 |
-| 저장소 문서 | 843 |
+| 저장소 문서 | 853 |
 | 제외 | 1 |
 | 측정 | 3 |
-| 테스트 | 353 |
-| 현재 설정 | 1 |
+| 테스트 | 413 |
+| 현재 설정 | 2 |
 | 현재 스키마 | 1 |
 | 현재 시스템 | 3 |
-| 현재 코드 | 12 |
-| 현재 파이프라인 코드 | 216 |
+| 현재 코드 | 16 |
+| 현재 파이프라인 코드 | 234 |
 
 ## 충돌·제외 규칙
 
@@ -196,13 +210,16 @@
 | `.github/workflows/gradle.yml` | 빌드·배포·설정 | 4,383 | 126 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `.github/workflows/nightly.yml` | 빌드·배포·설정 | 8,922 | 280 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `.gitignore` | 설정·기타 | 2,262 | 138 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `.superpowers/sdd/task-5-report.md` | 설정·기타 | 4,031 | 46 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `.superpowers/sdd/task-6-report.md` | 설정·기타 | 4,645 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `.superpowers/sdd/task-7-report.md` | 설정·기타 | 3,470 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `AGENTS.md` | 설정·기타 | 3,222 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `CLAUDE.md` | 설정·기타 | 6,730 | 112 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `CONTRIBUTING.md` | 설정·기타 | 19,220 | 608 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `Note` | 설정·기타 | 0 | 0 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `README.md` | 현재 시스템 | 7,540 | 150 | 수동 심층 검토+교차검증 |
 | `airflow/dags/cleanup_pipeline.py` | 설정·기타 | 1,747 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `build.gradle` | 빌드·배포·설정 | 9,487 | 347 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `build.gradle` | 빌드·배포·설정 | 10,916 | 395 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `characters.csv` | 설정·기타 | 75 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `config/pmd/ruleset.xml` | 설정·기타 | 1,522 | 44 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `config/sentinel/scripts/wait-for-redis.sh` | 설정·기타 | 201 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -475,6 +492,11 @@
 | `docs/01_ADR/ADR-742_loop-upstream-defer.md` | ADR | 4,678 | 98 | 수동 심층 검토+교차검증 |
 | `docs/01_ADR/ADR-743-small-file-resolution.md` | ADR | 6,106 | 113 | 수동 심층 검토+교차검증 |
 | `docs/01_ADR/ADR-744_internal-network-only-migration.md` | ADR | 5,816 | 139 | 수동 심층 검토+교차검증 |
+| `docs/01_ADR/ADR-745_pipeline-artifact-ownership.md` | ADR | 5,175 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/01_ADR/ADR-746-kafka-delivery-outcomes.md` | ADR | 3,158 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/01_ADR/ADR-747-valuation-kernel-ownership.md` | ADR | 3,341 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/01_ADR/ADR-748-nexon-client-ownership.md` | ADR | 2,669 | 87 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/01_ADR/ADR-749-worker-owned-etl-runtime.md` | ADR | 1,483 | 24 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/01_ADR/ADR-V5-cqrs-mongodb-readside.md` | ADR | 29,795 | 839 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/01_ADR/ADR-V5-query-server-nextjs-phase1.md` | ADR | 8,050 | 227 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/01_ADR/ADR-XXX_external-api-worker-cf-chaining.md` | ADR | 2,937 | 99 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -743,6 +765,11 @@
 | `docs/05_Reports/05_10_Unit3_Query_Injection_Audit/UNIT3_SUMMARY.md` | 저장소 문서 | 6,025 | 206 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/05_Reports/05_11_Unit4_Event_Ordering/UNIT4_IMPLEMENTATION_SUMMARY.md` | 저장소 문서 | 9,093 | 237 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/05_Reports/2026-06-18-blocking-audit.md` | 저장소 문서 | 11,519 | 147 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/05_Reports/2026-07-19-etl-runtime-ownership-closure-evidence.md` | 저장소 문서 | 18,923 | 207 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/05_Reports/2026-07-19-kafka-delivery-outcome-evidence.md` | 저장소 문서 | 7,675 | 73 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/05_Reports/2026-07-19-nexon-access-consolidation-evidence.md` | 저장소 문서 | 3,519 | 46 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/05_Reports/2026-07-19-pipeline-artifact-extraction-evidence.md` | 저장소 문서 | 23,367 | 279 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/05_Reports/2026-07-19-valuation-kernel-extraction-evidence.md` | 저장소 문서 | 5,092 | 62 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/05_Reports/Architecture/2026-02-22-ddd-verification-report.md` | 저장소 문서 | 11,688 | 335 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/05_Reports/BOTTLENECK_ANALYSIS_20260324.md` | 저장소 문서 | 40,992 | 1082 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/05_Reports/CODE_REVIEW_SIMPLIFY_REPORT.md` | 저장소 문서 | 6,300 | 167 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1308,8 +1335,12 @@
 | `docs/superpowers/plans/2026-07-19-etl-runtime-ownership-closure.md` | 저장소 문서 | 41,097 | 764 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/plans/2026-07-19-kafka-delivery-outcome.md` | 저장소 문서 | 49,054 | 748 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/plans/2026-07-19-nexon-access-consolidation.md` | 저장소 문서 | 34,857 | 619 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `docs/superpowers/plans/2026-07-19-pipeline-artifact-lifecycle.md` | 저장소 문서 | 62,933 | 987 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/plans/2026-07-19-pipeline-artifact-lifecycle.md` | 저장소 문서 | 64,294 | 985 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/plans/2026-07-19-valuation-kernel-extraction.md` | 저장소 문서 | 40,846 | 725 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/plans/2026-08-01-exhaustive-portfolio-case-content.md` | 저장소 문서 | 124,097 | 1984 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/plans/2026-08-01-exhaustive-portfolio-evidence-capture.md` | 저장소 문서 | 51,161 | 825 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/plans/2026-08-01-exhaustive-portfolio-rebuild.md` | 저장소 문서 | 16,623 | 276 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/plans/2026-08-01-exhaustive-portfolio-rendering-verification.md` | 저장소 문서 | 57,519 | 1000 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/plans/v5-cache-miss-call-chain.md` | 저장소 문서 | 37,061 | 1113 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/specs/2026-04-19-two-phase-batch-upsert-design.md` | 저장소 문서 | 6,210 | 174 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/specs/2026-04-20-pgmq-pipeline-design.md` | 저장소 문서 | 4,371 | 140 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1401,7 +1432,9 @@
 | `docs/superpowers/specs/2026-07-19-nexon-access-consolidation-design.md` | 저장소 문서 | 12,661 | 201 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/specs/2026-07-19-pipeline-artifact-lifecycle-design.md` | 저장소 문서 | 16,490 | 245 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `docs/superpowers/specs/2026-07-19-valuation-kernel-extraction-design.md` | 저장소 문서 | 14,510 | 224 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `docs/superpowers/specs/2026-08-01-exhaustive-portfolio-rebuild-design.md` | 저장소 문서 | 36,490 | 569 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `gradle.properties` | 빌드·배포·설정 | 816 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `gradle/artifact-runtime-classpath-metrics.init.gradle` | 빌드·배포·설정 | 1,774 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `gradle/libs.versions.toml` | 현재 시스템 | 9,187 | 200 | 수동 심층 검토+교차검증 |
 | `gradle/wrapper/gradle-wrapper.jar` | 설정·기타 | 43,764 | binary | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `gradle/wrapper/gradle-wrapper.properties` | 빌드·배포·설정 | 250 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1715,31 +1748,34 @@
 | `module-auth/src/main/resources/application.yml` | 빌드·배포·설정 | 506 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-auth/src/test/kotlin/maple/auth/kafka/PendingLoginRegistryTest.kt` | 테스트 | 2,037 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-auth/src/test/kotlin/maple/auth/login/LoginServiceTest.kt` | 테스트 | 5,215 | 136 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/build.gradle` | 빌드·배포·설정 | 1,898 | 72 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` | 현재 파이프라인 코드 | 1,331 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` | 현재 코드 | 10,758 | 224 | 수동 심층 검토+교차검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/cache/CacheBackendFactory.kt` | 현재 파이프라인 코드 | 2,484 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/build.gradle` | 빌드·배포·설정 | 2,008 | 73 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/CalculatorApplication.kt` | 현재 파이프라인 코드 | 1,347 | 28 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/CalculatorChunkProcessingCoordinator.kt` | 현재 코드 | 10,827 | 226 | 수동 심층 검토+교차검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/cache/CacheBackendFactory.kt` | 현재 파이프라인 코드 | 2,601 | 69 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CacheConfig.kt` | 현재 파이프라인 코드 | 522 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CacheStats.kt` | 현재 파이프라인 코드 | 451 | 16 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/CaffeineCacheBackend.kt` | 현재 파이프라인 코드 | 1,706 | 59 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapCacheBackend.kt` | 현재 파이프라인 코드 | 1,040 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapSerializedBackend.kt` | 현재 파이프라인 코드 | 4,885 | 132 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/config/CacheBackendConfig.kt` | 현재 파이프라인 코드 | 1,710 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/config/CalculatorEngineConfiguration.kt` | 현재 파이프라인 코드 | 832 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/cache/OffHeapSerializedBackend.kt` | 현재 파이프라인 코드 | 6,099 | 165 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/config/CacheBackendConfig.kt` | 현재 파이프라인 코드 | 2,613 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/config/CalculatorEngineConfiguration.kt` | 현재 파이프라인 코드 | 243 | 8 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/config/ChunkParserConfig.kt` | 현재 파이프라인 코드 | 436 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/config/CoroutineDispatcherConverter.kt` | 현재 파이프라인 코드 | 1,293 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/config/CoroutineDispatchers.kt` | 현재 파이프라인 코드 | 1,895 | 47 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/config/ExternalApiRunStatusProperties.kt` | 현재 파이프라인 코드 | 503 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/config/PipelineProperties.kt` | 현재 파이프라인 코드 | 2,057 | 42 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/consumer/KafkaSnapshotChunkReadyConsumer.kt` | 현재 파이프라인 코드 | 1,825 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/consumer/SnapshotDispatchService.kt` | 현재 코드 | 3,092 | 74 | 수동 심층 검토+교차검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/config/ValuationEngineConfiguration.kt` | 현재 파이프라인 코드 | 2,324 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/consumer/CalculatorSnapshotSubscription.kt` | 현재 파이프라인 코드 | 1,716 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/consumer/KafkaSnapshotChunkReadyConsumer.kt` | 현재 파이프라인 코드 | 1,606 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/consumer/SnapshotDispatchService.kt` | 현재 파이프라인 코드 | 1,619 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/event/ChunkProcessingEvent.kt` | 현재 파이프라인 코드 | 850 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/event/KafkaResultEventPublisher.kt` | 현재 파이프라인 코드 | 1,283 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/metrics/CacheMetrics.kt` | 현재 파이프라인 코드 | 2,119 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/metrics/CacheMetrics.kt` | 현재 파이프라인 코드 | 2,111 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/metrics/CalculatorMetrics.kt` | 현재 파이프라인 코드 | 2,911 | 59 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/metrics/CalculatorMetricsListener.kt` | 현재 파이프라인 코드 | 1,824 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/metrics/CalculatorVolumeMetrics.kt` | 현재 파이프라인 코드 | 2,820 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/metrics/ChunkParserMetrics.kt` | 현재 파이프라인 코드 | 873 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/metrics/ValuationCacheMetrics.kt` | 현재 파이프라인 코드 | 966 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/model/CalculationResult.kt` | 현재 파이프라인 코드 | 613 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/model/ChunkResult.kt` | 현재 파이프라인 코드 | 326 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/parser/FlatItem.kt` | 현재 파이프라인 코드 | 182 | 9 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1747,30 +1783,41 @@
 | `module-calculator/src/main/kotlin/maple/calculator/parser/SnapshotEquipmentParser.kt` | 현재 파이프라인 코드 | 3,003 | 64 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/parser/SnapshotEventParser.kt` | 현재 파이프라인 코드 | 587 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/pipeline/SnapshotChunkPipeline.kt` | 현재 파이프라인 코드 | 3,565 | 87 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/processor/CalculationCache.kt` | 현재 파이프라인 코드 | 2,712 | 74 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/processor/EquipmentCalculationInputConverter.kt` | 현재 파이프라인 코드 | 2,845 | 72 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/probability/CsvProbabilityRow.kt` | 현재 파이프라인 코드 | 576 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/probability/CsvProbabilityTableLoader.kt` | 현재 파이프라인 코드 | 3,862 | 98 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/processor/EquipmentCalculationInputConverter.kt` | 현재 파이프라인 코드 | 3,597 | 93 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/processor/SampleLogSerializer.kt` | 현재 파이프라인 코드 | 837 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/processor/SnapshotChunkProcessor.kt` | 현재 코드 | 9,800 | 228 | 수동 심층 검토+교차검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/processor/SnapshotChunkProcessor.kt` | 현재 코드 | 10,745 | 256 | 수동 심층 검토+교차검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/processor/ValuationCache.kt` | 현재 파이프라인 코드 | 2,190 | 58 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/processor/ValuationFailurePolicy.kt` | 현재 파이프라인 코드 | 1,214 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/reader/GzipJsonlSnapshotRecordReader.kt` | 현재 파이프라인 코드 | 1,731 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/kotlin/maple/calculator/runstate/CalculatorCurrentRunIdHolder.kt` | 현재 파이프라인 코드 | 5,153 | 124 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` | 현재 코드 | 6,593 | 152 | 수동 심층 검토+교차검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/writer/CountingOutputStream.kt` | 현재 파이프라인 코드 | 897 | 33 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/main/kotlin/maple/calculator/writer/WriteCounters.kt` | 현재 파이프라인 코드 | 591 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt` | 현재 코드 | 4,337 | 120 | 수동 심층 검토+교차검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/writer/CountingOutputStream.kt` | 현재 파이프라인 코드 | 877 | 33 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/kotlin/maple/calculator/writer/WriteCounters.kt` | 현재 파이프라인 코드 | 403 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/resources/application-prod.yml` | 현재 파이프라인 코드 | 85 | 5 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/resources/application.yml` | 현재 파이프라인 코드 | 3,406 | 96 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/main/resources/data/cube_probability.csv` | 현재 파이프라인 코드 | 22,692,657 | 413803 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/main/resources/logback-spring.xml` | 현재 파이프라인 코드 | 2,654 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/CalculatorChunkProcessingCoordinatorTest.kt` | 테스트 | 16,754 | 375 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/cache/CacheBackendFactoryTest.kt` | 테스트 | 1,613 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/CalculatorChunkProcessingCoordinatorTest.kt` | 테스트 | 16,896 | 376 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/cache/CacheBackendFactoryTest.kt` | 테스트 | 1,747 | 47 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/test/kotlin/maple/calculator/cache/CaffeineCacheBackendTest.kt` | 테스트 | 1,574 | 55 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/cache/OffHeapSerializedBackendTest.kt` | 테스트 | 4,296 | 128 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/consumer/KafkaSnapshotChunkReadyConsumerTest.kt` | 테스트 | 2,254 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/cache/OffHeapSerializedBackendTest.kt` | 테스트 | 6,519 | 191 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/config/ValuationEngineConfigurationTest.kt` | 테스트 | 2,437 | 48 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/consumer/CalculatorSnapshotSubscriptionTest.kt` | 테스트 | 4,479 | 101 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/consumer/KafkaSnapshotChunkReadyConsumerTest.kt` | 테스트 | 2,986 | 82 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/test/kotlin/maple/calculator/parser/SnapshotChunkParserTest.kt` | 테스트 | 3,520 | 88 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/test/kotlin/maple/calculator/pipeline/SnapshotChunkPipelineTest.kt` | 테스트 | 4,130 | 111 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/processor/EquipmentCalculationInputConverterTest.kt` | 테스트 | 11,207 | 301 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/writer/CalculationResultWriterTest.kt` | 테스트 | 4,634 | 116 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/probability/CsvProbabilityTableLoaderTest.kt` | 테스트 | 5,364 | 124 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/probability/CubeProbabilityResourceParityTest.kt` | 테스트 | 1,809 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/processor/EquipmentCalculationInputConverterTest.kt` | 테스트 | 11,794 | 329 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/processor/SnapshotChunkProcessorFailurePolicyTest.kt` | 테스트 | 4,959 | 125 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/processor/ValuationCacheTest.kt` | 테스트 | 11,303 | 266 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/processor/ValuationPerformanceEvidenceTest.kt` | 테스트 | 10,797 | 246 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/writer/CalculationResultWriterTest.kt` | 테스트 | 9,161 | 228 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-calculator/src/test/kotlin/maple/calculator/writer/CountingOutputStreamTest.kt` | 테스트 | 1,616 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/writer/StubObjectStorage.kt` | 테스트 | 2,526 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-calculator/src/test/kotlin/maple/calculator/writer/WriteCountersTest.kt` | 테스트 | 1,014 | 33 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/writer/StubObjectStorage.kt` | 테스트 | 3,074 | 65 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-calculator/src/test/kotlin/maple/calculator/writer/WriteCountersTest.kt` | 테스트 | 906 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-chaos-test/build.gradle` | 빌드·배포·설정 | 9,258 | 293 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-chaos-test/logs/trace.log` | 설정·기타 | 0 | 0 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-chaos-test/src/chaos-test/java/maple/expectation/chaos/circuitbreaker/CircuitBreakerClosedToOpenChaosTest.java` | 테스트 | 3,328 | 103 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1797,22 +1844,23 @@
 | `module-chaos-test/src/chaos-test/resources/junit-platform.properties` | 빌드·배포·설정 | 1,102 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-chaos-test/src/chaos-test/resources/logback-test.xml` | 설정·기타 | 583 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-chaos-test/src/chaos-test/resources/testcontainers.properties` | 빌드·배포·설정 | 143 | 5 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/build.gradle` | 빌드·배포·설정 | 1,643 | 48 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/CleanupApplication.kt` | 현재 파이프라인 코드 | 1,130 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/build.gradle` | 빌드·배포·설정 | 1,722 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/CleanupApplication.kt` | 현재 파이프라인 코드 | 1,131 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-cleanup/src/main/kotlin/maple/cleanup/config/CleanupProperties.kt` | 현재 파이프라인 코드 | 610 | 19 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/controller/CleanupController.kt` | 현재 파이프라인 코드 | 3,734 | 91 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/controller/InboxCleanupResponse.kt` | 현재 파이프라인 코드 | 134 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/inbox/ConsumedChunkInbox.kt` | 현재 코드 | 2,930 | 77 | 수동 심층 검토+교차검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/inbox/InboxProperties.kt` | 현재 파이프라인 코드 | 397 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/kotlin/maple/cleanup/service/RunCleanupService.kt` | 현재 파이프라인 코드 | 3,840 | 98 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/controller/CleanupController.kt` | 현재 파이프라인 코드 | 5,807 | 152 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/controller/InboxCleanupResponse.kt` | 현재 파이프라인 코드 | 175 | 8 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/inbox/CleanupInboxSubscription.kt` | 현재 파이프라인 코드 | 1,219 | 30 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/inbox/ConsumedChunkInbox.kt` | 현재 코드 | 2,435 | 59 | 수동 심층 검토+교차검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/inbox/InboxProperties.kt` | 현재 파이프라인 코드 | 480 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/kotlin/maple/cleanup/service/RunCleanupService.kt` | 현재 파이프라인 코드 | 2,767 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-cleanup/src/main/kotlin/maple/cleanup/service/StaleKafkaSkipService.kt` | 현재 파이프라인 코드 | 6,108 | 142 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-cleanup/src/main/resources/application-local.yml` | 현재 파이프라인 코드 | 26 | 2 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/main/resources/application.yml` | 현재 파이프라인 코드 | 1,269 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/main/resources/application.yml` | 현재 파이프라인 코드 | 1,288 | 58 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-cleanup/src/main/resources/logback-spring.xml` | 현재 파이프라인 코드 | 2,068 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-cleanup/src/test/kotlin/maple/cleanup/config/CleanupPropertiesTest.kt` | 테스트 | 1,618 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/test/kotlin/maple/cleanup/controller/CleanupControllerTest.kt` | 테스트 | 5,888 | 155 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/test/kotlin/maple/cleanup/inbox/ConsumedChunkInboxTest.kt` | 테스트 | 2,633 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-cleanup/src/test/kotlin/maple/cleanup/service/RunCleanupServiceTest.kt` | 테스트 | 5,633 | 134 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/test/kotlin/maple/cleanup/controller/CleanupControllerTest.kt` | 테스트 | 6,408 | 161 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/test/kotlin/maple/cleanup/inbox/ConsumedChunkInboxTest.kt` | 테스트 | 4,101 | 99 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-cleanup/src/test/kotlin/maple/cleanup/service/RunCleanupServiceTest.kt` | 테스트 | 8,274 | 185 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/build.gradle` | 빌드·배포·설정 | 2,486 | 76 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/avro/ocid-mapping.avsc` | 설정·기타 | 650 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/avro/result.avsc` | 설정·기타 | 1,141 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1836,7 +1884,7 @@
 | `module-common/src/main/kotlin/maple/expectation/common/metrics/MetricsRegistry.kt` | 기타 애플리케이션 코드 | 410 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/kotlin/maple/expectation/common/metrics/Timer.kt` | 기타 애플리케이션 코드 | 225 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/kotlin/maple/expectation/common/resource/ResourceLoader.kt` | 기타 애플리케이션 코드 | 2,073 | 65 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` | 기타 애플리케이션 코드 | 5,703 | 137 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-common/src/main/kotlin/maple/expectation/common/storage/ObjectStorage.kt` | 기타 애플리케이션 코드 | 5,212 | 128 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/kotlin/maple/expectation/common/util/FingerprintUtil.kt` | 기타 애플리케이션 코드 | 1,034 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/kotlin/maple/expectation/error/CommonErrorCode.kt` | 기타 애플리케이션 코드 | 4,849 | 75 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-common/src/main/kotlin/maple/expectation/error/ErrorCode.kt` | 기타 애플리케이션 코드 | 200 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -1921,7 +1969,22 @@
 | `module-core/src/main/kotlin/maple/expectation/core/auth/JwtPayload.kt` | 기타 애플리케이션 코드 | 806 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/auth/event/CharacterFetchRequest.kt` | 기타 애플리케이션 코드 | 381 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/auth/event/CharacterFetchResponse.kt` | 기타 애플리케이션 코드 | 486 | 16 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-core/src/main/kotlin/maple/expectation/core/calculator/CubeRateCalculator.kt` | 기타 애플리케이션 코드 | 1,836 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/ComponentCosts.kt` | 기타 애플리케이션 코드 | 348 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/ComponentTrials.kt` | 기타 애플리케이션 코드 | 147 | 6 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/ValuationInput.kt` | 기타 애플리케이션 코드 | 674 | 24 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/ValuationKernel.kt` | 기타 애플리케이션 코드 | 4,250 | 123 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/ValuationResult.kt` | 기타 애플리케이션 코드 | 323 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/cube/CubeTrialsKernel.kt` | 기타 애플리케이션 코드 | 4,601 | 118 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/cube/DpModeInferrer.kt` | 기타 애플리케이션 코드 | 2,832 | 85 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/cube/PermutationCubeTrialsKernel.kt` | 기타 애플리케이션 코드 | 1,743 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/cube/SlotDistributionBuilder.kt` | 기타 애플리케이션 코드 | 3,303 | 90 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/cube/StatContributionExtractor.kt` | 기타 애플리케이션 코드 | 1,411 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/error/ValuationExceptions.kt` | 기타 애플리케이션 코드 | 994 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/probability/ProbabilityKey.kt` | 기타 애플리케이션 코드 | 534 | 18 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/probability/ProbabilityRow.kt` | 기타 애플리케이션 코드 | 332 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/probability/ProbabilityTableSnapshot.kt` | 기타 애플리케이션 코드 | 2,742 | 66 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculation/probability/ProbabilityTableVersion.kt` | 기타 애플리케이션 코드 | 443 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/main/kotlin/maple/expectation/core/calculator/CubeRateCalculator.kt` | 기타 애플리케이션 코드 | 2,254 | 69 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/calculator/domain/BaseEquipmentItem.kt` | 기타 애플리케이션 코드 | 1,176 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/calculator/domain/BaseItem.kt` | 기타 애플리케이션 코드 | 869 | 28 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/calculator/domain/EnhanceDecorator.kt` | 기타 애플리케이션 코드 | 781 | 24 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2076,7 +2139,7 @@
 | `module-core/src/main/kotlin/maple/expectation/core/starforce/domain/StarforceCalculationEngine.kt` | 기타 애플리케이션 코드 | 9,131 | 294 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/starforce/domain/StarforceConstants.kt` | 기타 애플리케이션 코드 | 1,928 | 60 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/main/kotlin/maple/expectation/core/util/KahanSummation.kt` | 기타 애플리케이션 코드 | 2,030 | 89 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-core/src/test/java/maple/expectation/arch/CoreDependencyRuleTest.java` | 테스트 | 23,418 | 606 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/java/maple/expectation/arch/CoreDependencyRuleTest.java` | 테스트 | 24,109 | 626 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/java/maple/expectation/domain/cost/CostFormatterTest.java` | 테스트 | 3,271 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/java/maple/expectation/properties/BoundaryConditionsProperties.java` | 테스트 | 8,224 | 255 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/java/maple/expectation/properties/ExpectationValueProperties.java` | 테스트 | 16,244 | 475 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2085,6 +2148,14 @@
 | `module-core/src/test/kotlin/maple/core/domain/chunk/ChunkTest.kt` | 테스트 | 835 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/kotlin/maple/core/domain/chunk/ChunkTransformerTest.kt` | 테스트 | 1,276 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/kotlin/maple/core/domain/chunk/ChunkWriterTest.kt` | 테스트 | 869 | 24 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/ValuationKernelPropertyTest.kt` | 테스트 | 2,813 | 76 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/ValuationKernelTest.kt` | 테스트 | 7,042 | 180 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/cube/CubeTrialsKernelTest.kt` | 테스트 | 6,495 | 186 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/cube/DpModeInferrerTest.kt` | 테스트 | 2,252 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/cube/PermutationCubeTrialsKernelTest.kt` | 테스트 | 3,645 | 97 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/cube/SlotDistributionBuilderTest.kt` | 테스트 | 5,183 | 138 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculation/probability/ProbabilityTableSnapshotTest.kt` | 테스트 | 5,098 | 115 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-core/src/test/kotlin/maple/expectation/core/calculator/CubeRateCalculatorProbabilityRowTest.kt` | 테스트 | 1,128 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/kotlin/maple/expectation/core/dto/cube/CubeComputeKeyTest.kt` | 테스트 | 2,041 | 55 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/kotlin/maple/expectation/core/dto/v4/CalculationInputTest.kt` | 테스트 | 2,619 | 70 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/kotlin/maple/expectation/core/dto/v4/EquipmentItemConverterTest.kt` | 테스트 | 3,071 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2096,25 +2167,28 @@
 | `module-core/src/test/kotlin/maple/expectation/test/README.md` | 테스트 | 8,785 | 368 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-core/src/test/resources/junit-platform.properties` | 테스트 | 565 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/.gitignore` | 설정·기타 | 19 | 1 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/build.gradle` | 빌드·배포·설정 | 3,129 | 91 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/ExternalApiApplication.kt` | 현재 파이프라인 코드 | 2,312 | 53 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriter.kt` | 현재 파이프라인 코드 | 1,535 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchConsumer.kt` | 현재 파이프라인 코드 | 4,967 | 116 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthExecutorConfig.kt` | 현재 파이프라인 코드 | 1,671 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` | 현재 파이프라인 코드 | 4,215 | 106 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/config/NexonHttpClientProperties.kt` | 현재 파이프라인 코드 | 544 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/build.gradle` | 빌드·배포·설정 | 3,363 | 97 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/ExternalApiApplication.kt` | 현재 파이프라인 코드 | 1,572 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/artifact/OcidMappingArtifactWriter.kt` | 현재 파이프라인 코드 | 490 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriter.kt` | 현재 파이프라인 코드 | 1,721 | 46 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthCharacterFetchHandler.kt` | 현재 파이프라인 코드 | 5,240 | 123 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/auth/AuthRequestDltSanitizer.kt` | 현재 파이프라인 코드 | 1,533 | 39 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/cache/OcidCacheProvider.kt` | 현재 파이프라인 코드 | 4,389 | 110 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/config/ExternalApiExecutorConfiguration.kt` | 현재 파이프라인 코드 | 3,346 | 95 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/config/StreamingChunkParserConfig.kt` | 현재 파이프라인 코드 | 665 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/domain/ExternalApiFetchCommand.kt` | 현재 파이프라인 코드 | 772 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/domain/ExternalApiPayloadRef.kt` | 현재 파이프라인 코드 | 236 | 9 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/domain/ExternalApiProvider.kt` | 현재 파이프라인 코드 | 138 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/domain/ExternalApiProvider.kt` | 현재 파이프라인 코드 | 80 | 5 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/event/UrgentEventPublisher.kt` | 현재 파이프라인 코드 | 2,080 | 54 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/infra/nexon/NexonExternalApiClientAdapter.kt` | 현재 파이프라인 코드 | 5,995 | 131 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/infra/nexon/NexonExternalApiClientAdapter.kt` | 현재 파이프라인 코드 | 2,923 | 73 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/loop/LoopExecutorConfig.kt` | 현재 파이프라인 코드 | 2,250 | 50 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/loop/PhaseLoopController.kt` | 현재 파이프라인 코드 | 9,815 | 222 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/messaging/ExternalApiSubscriptions.kt` | 현재 파이프라인 코드 | 2,141 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/metrics/ChunkParserMetrics.kt` | 현재 파이프라인 코드 | 1,139 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/metrics/CleanupMetrics.kt` | 현재 파이프라인 코드 | 1,816 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/metrics/ExternalApiMetrics.kt` | 현재 파이프라인 코드 | 2,904 | 69 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/metrics/SchedulerMetrics.kt` | 현재 파이프라인 코드 | 1,862 | 47 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/metrics/OrphanCleanupMetrics.kt` | 현재 파이프라인 코드 | 1,542 | 48 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/metrics/SchedulerMetrics.kt` | 현재 파이프라인 코드 | 2,346 | 62 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/metrics/SnapshotFetchMetrics.kt` | 현재 파이프라인 코드 | 2,207 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/metrics/SnapshotVolumeMetrics.kt` | 현재 파이프라인 코드 | 2,368 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/parser/OcidResponseParser.kt` | 현재 파이프라인 코드 | 1,280 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2132,50 +2206,59 @@
 | `module-external-api/src/main/kotlin/maple/externalapi/runstatus/RunStatus.kt` | 현재 파이프라인 코드 | 680 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/runstatus/RunStatusResponse.kt` | 현재 파이프라인 코드 | 977 | 30 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/runstatus/RunStatusTracker.kt` | 현재 파이프라인 코드 | 7,206 | 179 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` | 현재 파이프라인 코드 | 18,818 | 411 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiScheduler.kt` | 현재 파이프라인 코드 | 19,668 | 430 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerLifecycle.kt` | 현재 파이프라인 코드 | 2,231 | 60 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/PhaseStopSignal.kt` | 현재 파이프라인 코드 | 935 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/PhaseStoppedException.kt` | 현재 파이프라인 코드 | 475 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchFetchSupport.kt` | 현재 파이프라인 코드 | 9,110 | 215 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/BatchProgress.kt` | 현재 파이프라인 코드 | 977 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhase.kt` | 현재 파이프라인 코드 | 4,532 | 106 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhase.kt` | 현재 파이프라인 코드 | 4,987 | 117 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/FetchProgressTracker.kt` | 현재 파이프라인 코드 | 1,700 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/HttpStatusExtractor.kt` | 현재 파이프라인 코드 | 508 | 16 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhase.kt` | 현재 파이프라인 코드 | 4,197 | 99 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` | 현재 파이프라인 코드 | 18,243 | 404 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` | 현재 파이프라인 코드 | 8,760 | 196 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhase.kt` | 현재 파이프라인 코드 | 4,650 | 110 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhase.kt` | 현재 파이프라인 코드 | 20,370 | 496 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhase.kt` | 현재 파이프라인 코드 | 8,498 | 198 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RunIdGenerator.kt` | 현재 파이프라인 코드 | 434 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/RunMarkerWriter.kt` | 현재 파이프라인 코드 | 745 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerClockConfig.kt` | 현재 파이프라인 코드 | 291 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerPhaseUtils.kt` | 현재 파이프라인 코드 | 2,116 | 59 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerProgressLogger.kt` | 현재 파이프라인 코드 | 1,518 | 42 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/scheduler/phase/SchedulerRateLimiter.kt` | 현재 파이프라인 코드 | 985 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` | 현재 파이프라인 코드 | 9,791 | 253 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` | 현재 코드 | 15,261 | 346 | 수동 심층 검토+교차검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/EndpointSinkFactory.kt` | 현재 파이프라인 코드 | 2,651 | 63 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriter.kt` | 현재 파이프라인 코드 | 7,956 | 185 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/OrphanTempFileCleanupHook.kt` | 현재 파이프라인 코드 | 4,461 | 113 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SinkEventPublisher.kt` | 현재 파이프라인 코드 | 1,661 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotChunkManifest.kt` | 현재 파이프라인 코드 | 1,000 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkFileManager.kt` | 현재 파이프라인 코드 | 10,786 | 267 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSink.kt` | 현재 코드 | 15,785 | 367 | 수동 심층 검토+교차검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/EndpointSinkFactory.kt` | 현재 파이프라인 코드 | 2,926 | 69 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriter.kt` | 현재 파이프라인 코드 | 5,916 | 152 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/OrphanTempFileCleanupHook.kt` | 현재 파이프라인 코드 | 6,556 | 189 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/PendingPublicationRecovery.kt` | 현재 파이프라인 코드 | 11,559 | 255 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/PendingPublicationRecoveryMetrics.kt` | 현재 파이프라인 코드 | 1,246 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SinkEventPublisher.kt` | 현재 파이프라인 코드 | 1,301 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotChunkManifest.kt` | 현재 파이프라인 코드 | 535 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotChunkRecord.kt` | 현재 파이프라인 코드 | 2,245 | 64 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotChunkingProperties.kt` | 현재 파이프라인 코드 | 1,049 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotFailedRecordWriter.kt` | 현재 파이프라인 코드 | 1,155 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisher.kt` | 현재 파이프라인 코드 | 4,796 | 105 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotFailedRecordWriter.kt` | 현재 파이프라인 코드 | 1,188 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisher.kt` | 현재 파이프라인 코드 | 4,764 | 111 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/event/KafkaSnapshotChunkEventPublisher.kt` | 현재 파이프라인 코드 | 2,988 | 65 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/event/NoOpSnapshotChunkEventPublisher.kt` | 현재 파이프라인 코드 | 1,258 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/event/SnapshotChunkEventPublisher.kt` | 현재 파이프라인 코드 | 569 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/event/SnapshotEventProperties.kt` | 현재 파이프라인 코드 | 674 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/kotlin/maple/externalapi/snapshot/event/SnapshotEventPublisherConfig.kt` | 현재 파이프라인 코드 | 5,083 | 138 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/main/kotlin/maple/externalapi/urgent/UrgentCharacterRequestConsumer.kt` | 현재 파이프라인 코드 | 7,116 | 183 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/main/kotlin/maple/externalapi/urgent/UrgentCharacterRequestConsumer.kt` | 현재 파이프라인 코드 | 7,020 | 178 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/resources/application-local.yml` | 현재 파이프라인 코드 | 402 | 16 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/resources/application-prod.yml` | 현재 파이프라인 코드 | 177 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/main/resources/application.yml` | 현재 설정 | 4,716 | 140 | 수동 심층 검토+교차검증 |
 | `module-external-api/src/main/resources/logback-spring.xml` | 현재 파이프라인 코드 | 2,657 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriterTest.kt` | 테스트 | 2,867 | 71 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/artifact/OcidMappingArtifactWriterTest.kt` | 테스트 | 2,910 | 65 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/artifact/UrgentChunkArtifactWriterTest.kt` | 테스트 | 3,984 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/auth/AuthCharacterFetchHandlerTest.kt` | 테스트 | 8,630 | 196 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/auth/AuthRequestDltSanitizerTest.kt` | 테스트 | 3,079 | 79 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/cache/OcidCacheProviderTest.kt` | 테스트 | 6,073 | 153 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/dataflow/DataflowContractTest.kt` | 테스트 | 14,066 | 278 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/config/ExternalApiExecutorConfigurationTest.kt` | 테스트 | 4,755 | 113 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/dataflow/DataflowContractTest.kt` | 테스트 | 15,650 | 315 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/infra/nexon/NexonExternalApiClientCharacterizationTest.kt` | 테스트 | 4,429 | 101 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/loop/LoopExecutorConfigTest.kt` | 테스트 | 1,332 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/loop/PhaseLoopControllerTest.kt` | 테스트 | 13,122 | 291 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/metrics/SchedulerMetricsTest.kt` | 테스트 | 1,666 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/messaging/ExternalApiSubscriptionsTest.kt` | 테스트 | 8,128 | 188 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/metrics/OrphanCleanupMetricsTest.kt` | 테스트 | 2,192 | 51 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/metrics/SchedulerMetricsTest.kt` | 테스트 | 2,769 | 69 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/poc/parquet/ParquetBenchmarkTest.kt` | 테스트 | 1,264 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/poc/parquet/ParquetOcidMappingReaderTest.kt` | 테스트 | 1,117 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/poc/parquet/ParquetOcidMappingWriterTest.kt` | 테스트 | 1,021 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2183,37 +2266,38 @@
 | `module-external-api/src/test/kotlin/maple/externalapi/runstatus/LoopStateTest.kt` | 테스트 | 1,516 | 46 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/runstatus/RunStatusTest.kt` | 테스트 | 1,713 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/runstatus/RunStatusTrackerTest.kt` | 테스트 | 10,975 | 239 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerLifecycleTest.kt` | 테스트 | 3,377 | 88 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerStopTest.kt` | 테스트 | 17,671 | 349 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerTest.kt` | 테스트 | 41,256 | 832 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/ExternalApiSchedulerTest.kt` | 테스트 | 40,967 | 829 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/PhaseStopSignalTest.kt` | 테스트 | 1,843 | 52 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/BatchFetchSupportStopTest.kt` | 테스트 | 2,906 | 76 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/BatchProgressTest.kt` | 테스트 | 1,972 | 62 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhaseTest.kt` | 테스트 | 3,462 | 84 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/CharacterBasicFetchPhaseTest.kt` | 테스트 | 4,109 | 96 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/FetchProgressTrackerTest.kt` | 테스트 | 2,022 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/HttpStatusExtractorTest.kt` | 테스트 | 1,356 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhaseTest.kt` | 테스트 | 3,238 | 81 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` | 테스트 | 14,502 | 313 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseStopTest.kt` | 테스트 | 1,339 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt` | 테스트 | 4,675 | 104 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/ItemEquipmentFetchPhaseTest.kt` | 테스트 | 4,026 | 97 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/OcidLookupPhaseTest.kt` | 테스트 | 24,348 | 536 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseStopTest.kt` | 테스트 | 1,252 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RankingFetchPhaseTest.kt` | 테스트 | 5,118 | 122 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RunIdGeneratorTest.kt` | 테스트 | 672 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/RunMarkerWriterTest.kt` | 테스트 | 1,301 | 34 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/SchedulerProgressLoggerTest.kt` | 테스트 | 1,053 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/scheduler/phase/SchedulerRateLimiterTest.kt` | 테스트 | 1,098 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkFileManagerAsyncTest.kt` | 테스트 | 4,159 | 105 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkFileManagerTest.kt` | 테스트 | 4,613 | 119 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSinkTest.kt` | 테스트 | 5,220 | 115 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/EndpointSinkFactoryTest.kt` | 테스트 | 3,474 | 87 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriterTest.kt` | 테스트 | 13,187 | 276 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/OrphanTempFileCleanupHookTest.kt` | 테스트 | 7,744 | 192 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/SnapshotChunkManifestWriterTest.kt` | 테스트 | 2,390 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/SnapshotFailedRecordWriterTest.kt` | 테스트 | 1,856 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisherTest.kt` | 테스트 | 6,359 | 148 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkFileManagerAsyncTest.kt` | 테스트 | 5,127 | 123 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkFileManagerTest.kt` | 테스트 | 11,048 | 259 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/ChunkedSnapshotSinkTest.kt` | 테스트 | 20,281 | 448 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/EndpointSinkFactoryTest.kt` | 테스트 | 4,506 | 103 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/GzipJsonlChunkWriterTest.kt` | 테스트 | 33,210 | 758 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/OrphanTempFileCleanupHookTest.kt` | 테스트 | 5,389 | 140 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/PendingPublicationRecoveryTest.kt` | 테스트 | 20,401 | 448 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/SnapshotFailedRecordWriterTest.kt` | 테스트 | 1,955 | 50 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/snapshot/SnapshotSinkEventPublisherTest.kt` | 테스트 | 10,043 | 242 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-external-api/src/test/kotlin/maple/externalapi/test/ExtApiBlockingPrimitiveGateTest.kt` | 테스트 | 3,500 | 78 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-external-api/src/test/kotlin/maple/externalapi/urgent/UrgentCharacterRequestConsumerTest.kt` | 테스트 | 8,410 | 199 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/build.gradle` | 빌드·배포·설정 | 6,102 | 210 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-external-api/src/test/kotlin/maple/externalapi/urgent/UrgentCharacterRequestConsumerTest.kt` | 테스트 | 11,080 | 250 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/build.gradle` | 빌드·배포·설정 | 6,257 | 213 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/CoreValuationCalculatorAdapter.java` | 기타 애플리케이션 코드 | 1,809 | 58 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/EquipmentEnhanceDecorator.java` | 기타 애플리케이션 코드 | 1,229 | 50 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/EquipmentExpectationCalculator.java` | 기타 애플리케이션 코드 | 4,315 | 153 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/EquipmentExpectationCalculatorFactory.java` | 기타 애플리케이션 코드 | 4,693 | 122 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/EquipmentExpectationCalculatorFactory.java` | 기타 애플리케이션 코드 | 6,738 | 190 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/impl/BaseEquipmentItem.java` | 기타 애플리케이션 코드 | 1,324 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/java/maple/expectation/application/service/calculator/v4/impl/StarforceDecoratorV4.java` | 기타 애플리케이션 코드 | 3,717 | 124 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/java/maple/expectation/application/service/cube/AbstractCubeDecorator.java` | 기타 애플리케이션 코드 | 6,542 | 243 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2343,13 +2427,15 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/PostgresL2CacheFactory.kt` | 기타 애플리케이션 코드 | 7,318 | 216 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/PostgresL2CacheStrategy.kt` | 기타 애플리케이션 코드 | 13,758 | 360 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/cache/tiered/TypedValue.kt` | 기타 애플리케이션 코드 | 969 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/calculation/LegacyProbabilityTableLoader.kt` | 기타 애플리케이션 코드 | 3,703 | 87 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/calculation/LegacyValuationConfiguration.kt` | 기타 애플리케이션 코드 | 890 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/character/notify/CharacterCreationListener.kt` | 기타 애플리케이션 코드 | 7,212 | 206 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/character/notify/CharacterCreationNotifier.kt` | 기타 애플리케이션 코드 | 1,687 | 54 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/AsyncGuard.kt` | 기타 애플리케이션 코드 | 1,450 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/BackpressureLimiter.kt` | 기타 애플리케이션 코드 | 755 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/BackpressureRejectedException.kt` | 기타 애플리케이션 코드 | 208 | 3 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/BoundedSemaphore.kt` | 기타 애플리케이션 코드 | 530 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/ConcurrencyConfiguration.kt` | 기타 애플리케이션 코드 | 2,236 | 58 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/ConcurrencyConfiguration.kt` | 기타 애플리케이션 코드 | 1,638 | 45 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/ExecutorQualifier.kt` | 기타 애플리케이션 코드 | 152 | 9 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/ExecutorRegistry.kt` | 기타 애플리케이션 코드 | 334 | 8 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/concurrency/ExecutorSelector.kt` | 기타 애플리케이션 코드 | 725 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2375,7 +2461,7 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CaffeineOnlyCacheConfig.kt` | 기타 애플리케이션 코드 | 4,474 | 127 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CalculationPortConfig.kt` | 기타 애플리케이션 코드 | 1,750 | 50 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CalculationProperties.kt` | 기타 애플리케이션 코드 | 898 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CalculatorEngineAutoConfiguration.kt` | 기타 애플리케이션 코드 | 3,037 | 62 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CalculatorEngineAutoConfiguration.kt` | 기타 애플리케이션 코드 | 1,116 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/CoreExecutorConfig.kt` | 기타 애플리케이션 코드 | 5,088 | 119 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/DiscordTimeoutProperties.kt` | 기타 애플리케이션 코드 | 1,235 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/EquipmentProcessingExecutorConfig.kt` | 기타 애플리케이션 코드 | 6,063 | 161 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2389,9 +2475,9 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/InfraExecutorConfig.kt` | 기타 애플리케이션 코드 | 9,904 | 205 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/ItemCalculationExecutorConfig.kt` | 기타 애플리케이션 코드 | 3,799 | 97 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/JacksonConfig.kt` | 기타 애플리케이션 코드 | 2,629 | 70 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/KafkaConsumerConfig.kt` | 기타 애플리케이션 코드 | 1,854 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/KafkaConsumerConfig.kt` | 기타 애플리케이션 코드 | 383 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/LockHikariConfig.kt` | 기타 애플리케이션 코드 | 4,502 | 98 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/MaplestoryApiConfig.kt` | 기타 애플리케이션 코드 | 2,129 | 54 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/MaplestoryApiConfig.kt` | 기타 애플리케이션 코드 | 897 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/MicroBatchWriterProperties.kt` | 기타 애플리케이션 코드 | 1,565 | 47 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/MonitoringThresholdProperties.kt` | 기타 애플리케이션 코드 | 2,347 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/config/NexonApiProperties.kt` | 기타 애플리케이션 코드 | 5,211 | 141 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2443,7 +2529,7 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/executor/policy/TaskLogTags.kt` | 기타 애플리케이션 코드 | 998 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/executor/strategy/ExceptionTranslator.kt` | 기타 애플리케이션 코드 | 5,482 | 141 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/NexonApiClient.kt` | 기타 애플리케이션 코드 | 1,742 | 47 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/NexonAuthClient.kt` | 기타 애플리케이션 코드 | 810 | 28 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/NexonAuthClient.kt` | 기타 애플리케이션 코드 | 617 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/config/ExternalApiMetricsFilter.kt` | 기타 애플리케이션 코드 | 7,577 | 210 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/config/NexonApiMetricsConfig.kt` | 기타 애플리케이션 코드 | 2,007 | 55 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/dto/v2/CharacterBasicResponse.kt` | 기타 애플리케이션 코드 | 799 | 30 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2456,9 +2542,10 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/FallbackHandler.kt` | 기타 애플리케이션 코드 | 9,505 | 219 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/MetricsNexonApiClientWrapper.kt` | 기타 애플리케이션 코드 | 8,207 | 206 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/NexonApiClientConfig.kt` | 기타 애플리케이션 코드 | 3,092 | 92 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/NexonCharacterListMapper.kt` | 기타 애플리케이션 코드 | 1,037 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/PgmqFallbackPublisher.kt` | 기타 애플리케이션 코드 | 4,333 | 122 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/RealNexonApiClient.kt` | 기타 애플리케이션 코드 | 5,378 | 136 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/RealNexonAuthClient.kt` | 기타 애플리케이션 코드 | 4,217 | 106 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/RealNexonApiClient.kt` | 기타 애플리케이션 코드 | 4,045 | 100 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/RealNexonAuthClient.kt` | 기타 애플리케이션 코드 | 3,119 | 81 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/impl/ResilientNexonApiClient.kt` | 기타 애플리케이션 코드 | 11,006 | 278 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/package-info.kt` | 기타 애플리케이션 코드 | 391 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/external/snapshot/SnapshotObjectStoreAdapter.kt` | 기타 애플리케이션 코드 | 2,241 | 55 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2606,7 +2693,7 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/CharacterValuationViewJpaRepository.kt` | 기타 애플리케이션 코드 | 900 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/CharacterViewBatchRepository.kt` | 기타 애플리케이션 코드 | 5,705 | 157 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/CubeProbabilityRepository.kt` | 기타 애플리케이션 코드 | 1,897 | 70 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/CubeProbabilityRepositoryImpl.kt` | 기타 애플리케이션 코드 | 4,413 | 117 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/CubeProbabilityRepositoryImpl.kt` | 기타 애플리케이션 코드 | 3,457 | 104 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/DonationHistoryRepository.kt` | 기타 애플리케이션 코드 | 431 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/EquipmentExpectationSummaryBatchRepository.kt` | 기타 애플리케이션 코드 | 8,373 | 220 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/persistence/repository/EquipmentExpectationSummaryRepository.kt` | 기타 애플리케이션 코드 | 941 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2688,11 +2775,7 @@
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/shutdown/ShutdownProperties.kt` | 기타 애플리케이션 코드 | 1,262 | 51 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/shutdown/dto/FlushResult.kt` | 기타 애플리케이션 코드 | 754 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/shutdown/dto/ShutdownData.kt` | 기타 애플리케이션 코드 | 974 | 34 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorage.kt` | 기타 애플리케이션 코드 | 6,912 | 164 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicator.kt` | 기타 애플리케이션 코드 | 1,456 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorage.kt` | 기타 애플리케이션 코드 | 15,251 | 331 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/MinioProperties.kt` | 기타 애플리케이션 코드 | 798 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt` | 기타 애플리케이션 코드 | 6,638 | 148 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/main/kotlin/maple/expectation/infrastructure/storage/StorageConfig.kt` | 기타 애플리케이션 코드 | 319 | 9 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/util/AsyncUtils.kt` | 기타 애플리케이션 코드 | 5,146 | 158 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/util/JsonMapper.kt` | 기타 애플리케이션 코드 | 2,235 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/main/kotlin/maple/expectation/infrastructure/util/PermutationUtil.kt` | 기타 애플리케이션 코드 | 743 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2750,6 +2833,8 @@
 | `module-infra/src/test/java/maple/expectation/infrastructure/executor/LogicExecutorTest.java` | 테스트 | 26,906 | 771 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/java/maple/expectation/infrastructure/like/LikeToggleServiceTest.java` | 테스트 | 10,206 | 235 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/adapter/outgoing/OutboxEventPortAdapterTest.kt` | 테스트 | 2,648 | 73 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/application/service/calculator/v4/CoreLegacyValuationParityTest.kt` | 테스트 | 12,025 | 249 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/application/service/calculator/v4/LegacyValuationGoldenMasterTest.kt` | 테스트 | 14,723 | 336 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/admission/GlobalAdmissionControlTest.kt` | 테스트 | 12,051 | 301 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/aop/aspect/NexonDataCacheAspectTest.kt` | 테스트 | 2,316 | 54 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/batch/AdaptiveMicroBatchUserServiceTest.kt` | 테스트 | 12,833 | 382 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2766,6 +2851,8 @@
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/converter/EquipmentResponseToCalculationInputConverterTest.kt` | 테스트 | 3,715 | 85 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/executor/classifier/ExceptionClassifierTest.kt` | 테스트 | 6,306 | 179 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/external/impl/MetricsNexonApiClientWrapperTest.kt` | 테스트 | 5,484 | 126 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/external/impl/NexonCompatibilityAdapterTest.kt` | 테스트 | 13,945 | 301 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/external/impl/RealNexonAuthClientCharacterizationTest.kt` | 테스트 | 2,393 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/external/snapshot/SnapshotObjectStoreAdapterTest.kt` | 테스트 | 2,320 | 66 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/fanout/NexonFanOutBatchLoaderTest.kt` | 테스트 | 6,420 | 156 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/job/ApiDataFetchOrchestratorTest.kt` | 테스트 | 6,479 | 160 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2789,17 +2876,13 @@
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/pgmq/ProcessOutcomeTest.kt` | 테스트 | 1,886 | 54 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/queue/pgmq/CalculationQueueProducerIntegrationTest.kt` | 테스트 | 11,646 | 358 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/queue/pgmq/DonationQueueProducerIntegrationTest.kt` | 테스트 | 13,725 | 426 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/CalculatorBootSmokeIT.kt` | 테스트 | 1,558 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/CleanupBootSmokeIT.kt` | 테스트 | 1,546 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/ExtApiBootSmokeIT.kt` | 테스트 | 1,545 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsObjectStorageTest.kt` | 테스트 | 5,058 | 139 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/LocalFsPutStreamMultipartTest.kt` | 테스트 | 2,707 | 71 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioHealthIndicatorTest.kt` | 테스트 | 1,508 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioObjectStorageIT.kt` | 테스트 | 7,090 | 179 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/CalculatorBootSmokeIT.kt` | 테스트 | 1,376 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/CleanupBootSmokeIT.kt` | 테스트 | 1,364 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/ExtApiBootSmokeIT.kt` | 테스트 | 1,363 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioPolicyJsonTest.kt` | 테스트 | 6,044 | 141 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/MinioPolicyScopeIT.kt` | 테스트 | 10,075 | 219 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt` | 테스트 | 1,147 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/SynchronizerBootSmokeIT.kt` | 테스트 | 1,566 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/StorageConfigTest.kt` | 테스트 | 1,351 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/kotlin/maple/expectation/infrastructure/storage/SynchronizerBootSmokeIT.kt` | 테스트 | 1,384 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/test/LockBlockingPrimitiveGateTest.kt` | 테스트 | 7,156 | 176 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/test/PgmqBlockingPrimitiveGateTest.kt` | 테스트 | 5,252 | 113 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/infrastructure/worker/CalculationCompletedWorkerAsyncTest.kt` | 테스트 | 8,462 | 206 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2815,7 +2898,115 @@
 | `module-infra/src/test/kotlin/maple/expectation/test/InfraTestConfiguration.kt` | 테스트 | 909 | 28 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/test/README.md` | 테스트 | 6,912 | 283 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/kotlin/maple/expectation/test/ServiceIntegrationTestBase.kt` | 테스트 | 2,130 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-infra/src/test/resources/golden/valuation-kernel-v1-cases.json` | 테스트 | 21,396 | 770 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-infra/src/test/resources/sql/init-pgmq.sql` | 테스트 | 273 | 9 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/build.gradle` | 빌드·배포·설정 | 816 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/byok/ByokNexonClient.kt` | 기타 애플리케이션 코드 | 747 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/byok/CharacterListDecoder.kt` | 기타 애플리케이션 코드 | 2,101 | 60 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/byok/NexonCharacterList.kt` | 기타 애플리케이션 코드 | 467 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/config/ByokNexonClientProperties.kt` | 기타 애플리케이션 코드 | 1,298 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/config/LegacyNexonApiProperties.kt` | 기타 애플리케이션 코드 | 308 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/config/NexonClientAutoConfiguration.kt` | 기타 애플리케이션 코드 | 6,782 | 165 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/config/NexonClientProfile.kt` | 기타 애플리케이션 코드 | 2,771 | 75 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/config/SystemNexonClientProperties.kt` | 기타 애플리케이션 코드 | 1,300 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/failure/NexonErrorEnvelope.kt` | 기타 애플리케이션 코드 | 366 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/failure/NexonFailure.kt` | 기타 애플리케이션 코드 | 3,119 | 123 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/failure/NexonFailureClassifier.kt` | 기타 애플리케이션 코드 | 4,013 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/metrics/NexonClientMetrics.kt` | 기타 애플리케이션 코드 | 2,009 | 72 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/model/NexonEndpointPurpose.kt` | 기타 애플리케이션 코드 | 187 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/model/NexonRequest.kt` | 기타 애플리케이션 코드 | 642 | 17 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/system/SystemKeyNexonClient.kt` | 기타 애플리케이션 코드 | 388 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/transport/NexonTransport.kt` | 기타 애플리케이션 코드 | 3,331 | 75 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/transport/NexonTransportFactory.kt` | 기타 애플리케이션 코드 | 3,739 | 84 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/main/kotlin/maple/nexon/client/transport/NexonTransportResources.kt` | 기타 애플리케이션 코드 | 2,196 | 66 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/byok/ByokNexonClientTest.kt` | 테스트 | 7,222 | 165 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/byok/NexonCharacterListTest.kt` | 테스트 | 1,532 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/config/NexonClientPropertiesTest.kt` | 테스트 | 3,462 | 89 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/failure/NexonFailureClassifierTest.kt` | 테스트 | 4,379 | 86 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/security/NexonCredentialRedactionTest.kt` | 테스트 | 7,969 | 183 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/system/SystemKeyNexonClientTest.kt` | 테스트 | 1,247 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/transport/NexonTransportResourcesTest.kt` | 테스트 | 2,197 | 57 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-nexon-client/src/test/kotlin/maple/nexon/client/transport/NexonTransportTest.kt` | 테스트 | 7,270 | 173 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/build.gradle` | 빌드·배포·설정 | 885 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/config/ArtifactStorageAutoConfiguration.kt` | 기타 애플리케이션 코드 | 6,392 | 141 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/config/ArtifactStorageHealthIndicator.kt` | 기타 애플리케이션 코드 | 1,184 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/ArtifactKey.kt` | 기타 애플리케이션 코드 | 765 | 20 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/ArtifactPrefix.kt` | 기타 애플리케이션 코드 | 695 | 19 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/ArtifactReplayEventId.kt` | 기타 애플리케이션 코드 | 2,451 | 63 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/ArtifactSegment.kt` | 기타 애플리케이션 코드 | 496 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/CalculatorArtifactLayout.kt` | 기타 애플리케이션 코드 | 914 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/CleanupInboxLayout.kt` | 기타 애플리케이션 코드 | 426 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/OcidMappingArtifactLayout.kt` | 기타 애플리케이션 코드 | 600 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/identity/SourceArtifactLayout.kt` | 기타 애플리케이션 코드 | 3,031 | 72 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/inbox/CleanupInboxEntry.kt` | 기타 애플리케이션 코드 | 503 | 21 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/inbox/CleanupInboxStore.kt` | 기타 애플리케이션 코드 | 512 | 19 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/inbox/ObjectStorageCleanupInboxStore.kt` | 현재 코드 | 4,018 | 100 | 수동 심층 검토+교차검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/lifecycle/RunLifecycle.kt` | 기타 애플리케이션 코드 | 3,430 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/lifecycle/RunState.kt` | 기타 애플리케이션 코드 | 406 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/retention/ArtifactEndpointInfo.kt` | 기타 애플리케이션 코드 | 267 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/retention/ArtifactRetentionService.kt` | 기타 애플리케이션 코드 | 2,538 | 65 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/retention/ArtifactRunCatalog.kt` | 기타 애플리케이션 코드 | 7,336 | 169 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/retention/ArtifactRunInfo.kt` | 기타 애플리케이션 코드 | 378 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/ArtifactUploadResources.kt` | 기타 애플리케이션 코드 | 1,545 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/ConditionalObjectStorage.kt` | 기타 애플리케이션 코드 | 1,845 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/LocalFsObjectStorage.kt` | 기타 애플리케이션 코드 | 11,328 | 275 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/MinioObjectStorage.kt` | 기타 애플리케이션 코드 | 13,250 | 312 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/MinioProperties.kt` | 기타 애플리케이션 코드 | 422 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/storage/MinioStorageResources.kt` | 기타 애플리케이션 코드 | 5,068 | 127 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/write/ArtifactReceipt.kt` | 기타 애플리케이션 코드 | 272 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/write/ArtifactWriter.kt` | 현재 코드 | 1,546 | 46 | 수동 심층 검토+교차검증 |
+| `module-pipeline-artifact/src/main/kotlin/maple/pipeline/artifact/write/GzipArtifactSession.kt` | 현재 코드 | 7,233 | 194 | 수동 심층 검토+교차검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/config/ArtifactStorageHealthIndicatorTest.kt` | 테스트 | 2,821 | 60 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/identity/ArtifactIdentitySourceGuardTest.kt` | 테스트 | 6,171 | 178 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/identity/ArtifactKeyTest.kt` | 테스트 | 1,716 | 53 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/identity/ArtifactLayoutGoldenTest.kt` | 테스트 | 6,399 | 137 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/inbox/ObjectStorageCleanupInboxStoreTest.kt` | 테스트 | 8,610 | 203 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/lifecycle/RunLifecycleTest.kt` | 테스트 | 10,927 | 254 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/retention/ArtifactRunCatalogTest.kt` | 테스트 | 10,384 | 206 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/ArtifactUploadResourcesTest.kt` | 테스트 | 2,823 | 80 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/LocalFsObjectStorageTest.kt` | 테스트 | 21,844 | 529 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/LocalFsPutStreamMultipartTest.kt` | 테스트 | 3,396 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/MinioObjectStorageAsyncFailureTest.kt` | 테스트 | 9,234 | 229 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/MinioObjectStorageIT.kt` | 테스트 | 8,995 | 230 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/MinioStorageResourcesTest.kt` | 테스트 | 7,496 | 201 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/storage/ObjectStorageContract.kt` | 테스트 | 8,269 | 209 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-artifact/src/test/kotlin/maple/pipeline/artifact/write/ArtifactWriterTest.kt` | 테스트 | 14,661 | 332 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/build.gradle` | 빌드·배포·설정 | 745 | 26 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/KafkaDeliveryAdapter.kt` | 현재 코드 | 9,147 | 245 | 수동 심층 검토+교차검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PartitionControl.kt` | 기타 애플리케이션 코드 | 656 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PartitionLane.kt` | 현재 코드 | 4,152 | 130 | 수동 심층 검토+교차검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PartitionLaneRegistry.kt` | 기타 애플리케이션 코드 | 3,103 | 82 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PartitionOwnership.kt` | 기타 애플리케이션 코드 | 296 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PipelineDeliveryExecutors.kt` | 기타 애플리케이션 코드 | 2,080 | 52 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/adapter/PipelineKafkaEndpointRegistry.kt` | 기타 애플리케이션 코드 | 3,613 | 92 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/config/PipelineKafkaConsumerConfiguration.kt` | 현재 설정 | 5,186 | 117 | 수동 심층 검토+교차검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/CompletionFailures.kt` | 기타 애플리케이션 코드 | 411 | 12 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/DeliveryContext.kt` | 기타 애플리케이션 코드 | 276 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/DeliveryHandler.kt` | 기타 애플리케이션 코드 | 214 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/DeliveryOutcome.kt` | 기타 애플리케이션 코드 | 943 | 35 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/PipelineSubscription.kt` | 기타 애플리케이션 코드 | 508 | 19 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/contract/SafeDeliveryException.kt` | 기타 애플리케이션 코드 | 371 | 15 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltRecordFactory.kt` | 기타 애플리케이션 코드 | 1,252 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltRecordSanitizer.kt` | 기타 애플리케이션 코드 | 1,272 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltTopologyAction.kt` | 기타 애플리케이션 코드 | 1,086 | 40 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltTopologyHealthIndicator.kt` | 기타 애플리케이션 코드 | 1,193 | 29 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltTopologyResources.kt` | 기타 애플리케이션 코드 | 9,682 | 238 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/DltTopologyStatus.kt` | 기타 애플리케이션 코드 | 3,206 | 77 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/KafkaDltPublisher.kt` | 기타 애플리케이션 코드 | 873 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/dlt/SafeDeadLetterPublishingRecoverer.kt` | 기타 애플리케이션 코드 | 3,305 | 85 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/metrics/DeliveryMetrics.kt` | 기타 애플리케이션 코드 | 4,078 | 137 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/main/kotlin/maple/pipeline/messaging/policy/DeliveryRetryPolicy.kt` | 기타 애플리케이션 코드 | 395 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/adapter/KafkaDeliveryAdapterTest.kt` | 테스트 | 12,663 | 347 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/adapter/PartitionLaneRegistryTest.kt` | 테스트 | 4,290 | 100 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/adapter/PartitionLaneTest.kt` | 테스트 | 5,855 | 159 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/adapter/PipelineDeliveryExecutorsTest.kt` | 테스트 | 1,831 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/config/AsyncAcksScopeCharacterizationTest.kt` | 테스트 | 1,650 | 33 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/config/PipelineKafkaConsumerConfigurationTest.kt` | 테스트 | 770 | 19 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/contract/DeliveryContractTest.kt` | 테스트 | 5,969 | 159 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/dlt/DltRecordFactoryTest.kt` | 테스트 | 2,267 | 58 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/dlt/DltTopologyResourcesTest.kt` | 테스트 | 11,151 | 245 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/dlt/DltTopologyStatusTest.kt` | 테스트 | 2,686 | 73 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-pipeline-messaging/src/test/kotlin/maple/pipeline/messaging/dlt/SafeDeadLetterPublishingRecovererTest.kt` | 테스트 | 2,663 | 56 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-rest-controller/build.gradle` | 빌드·배포·설정 | 1,760 | 71 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-rest-controller/src/main/kotlin/maple/restcontroller/RestControllerApplication.kt` | 현재 파이프라인 코드 | 419 | 13 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-rest-controller/src/main/kotlin/maple/restcontroller/advice/RestControllerExceptionHandler.kt` | 현재 파이프라인 코드 | 1,621 | 43 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2883,21 +3074,24 @@
 | `module-rest-controller/src/test/kotlin/maple/restcontroller/read/UrgentReadStateTest.kt` | 테스트 | 4,094 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-rest-controller/src/test/kotlin/maple/restcontroller/urgent/UrgentCharacterNotFoundConsumerTest.kt` | 테스트 | 1,326 | 36 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-rest-controller/src/test/kotlin/maple/restcontroller/urgent/UrgentTriggerPublisherTest.kt` | 테스트 | 1,636 | 37 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/build.gradle` | 빌드·배포·설정 | 1,536 | 60 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/SynchronizerApplication.kt` | 현재 파이프라인 코드 | 1,264 | 31 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/build.gradle` | 빌드·배포·설정 | 1,602 | 61 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/SynchronizerApplication.kt` | 현재 파이프라인 코드 | 928 | 22 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/adapter/chunk/ChunkPipelineOrchestrator.kt` | 현재 코드 | 2,253 | 53 | 수동 심층 검토+교차검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/builder/EquipmentDocumentBuilder.kt` | 현재 파이프라인 코드 | 1,962 | 52 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/config/SynchronizerExecutorConfiguration.kt` | 현재 파이프라인 코드 | 4,108 | 112 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/config/SynchronizerMdcTaskDecorator.kt` | 현재 파이프라인 코드 | 693 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/config/SynchronizerReaderConfig.kt` | 현재 파이프라인 코드 | 416 | 14 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` | 현재 파이프라인 코드 | 2,037 | 48 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplate.kt` | 현재 코드 | 10,543 | 298 | 수동 심층 검토+교차검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/BasicSnapshotChunkConsumer.kt` | 현재 파이프라인 코드 | 1,676 | 49 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplate.kt` | 현재 코드 | 10,384 | 259 | 수동 심층 검토+교차검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkExecutionProperties.kt` | 현재 파이프라인 코드 | 1,118 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/ChunkLifecycleEvent.kt` | 현재 파이프라인 코드 | 651 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/KafkaResultChunkConsumer.kt` | 현재 파이프라인 코드 | 6,653 | 147 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` | 현재 파이프라인 코드 | 2,337 | 52 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/KafkaResultChunkConsumer.kt` | 현재 파이프라인 코드 | 6,033 | 139 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/OcidLookupRunConsumer.kt` | 현재 파이프라인 코드 | 2,154 | 53 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/consumer/SynchronizerSubscriptions.kt` | 현재 파이프라인 코드 | 3,058 | 66 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/domain/CalculatedEquipmentItem.kt` | 현재 파이프라인 코드 | 543 | 24 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/domain/ChunkDomainReexport.kt` | 현재 파이프라인 코드 | 365 | 6 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/event/KafkaChunkConsumedEventPublisher.kt` | 현재 파이프라인 코드 | 1,375 | 32 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/event/ResultChunkEventPathBuilder.kt` | 현재 파이프라인 코드 | 277 | 8 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/event/KafkaChunkConsumedEventPublisher.kt` | 현재 파이프라인 코드 | 1,103 | 25 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/event/ResultChunkEventPathBuilder.kt` | 현재 파이프라인 코드 | 356 | 10 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/ChunkExecutionMetrics.kt` | 현재 파이프라인 코드 | 1,652 | 30 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/DocumentVolumeMetrics.kt` | 현재 파이프라인 코드 | 1,613 | 34 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/metrics/SynchronizerChunkMetricsListener.kt` | 현재 파이프라인 코드 | 1,460 | 41 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2911,8 +3105,9 @@
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/ChunkProcessResult.kt` | 현재 파이프라인 코드 | 152 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/ChunkProcessor.kt` | 현재 파이프라인 코드 | 179 | 7 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/processor/DefaultChunkProcessor.kt` | 현재 파이프라인 코드 | 1,014 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/ranking/EquipmentRankingMetrics.kt` | 현재 파이프라인 코드 | 741 | 23 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/ranking/EquipmentRankingProperties.kt` | 현재 파이프라인 코드 | 354 | 11 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/ranking/EquipmentRankingRedisWriter.kt` | 현재 파이프라인 코드 | 3,166 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/ranking/EquipmentRankingRedisWriter.kt` | 현재 파이프라인 코드 | 2,878 | 79 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/redis/OcidMappingRedisWriter.kt` | 현재 파이프라인 코드 | 1,092 | 33 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/CharacterBasicRepository.kt` | 현재 파이프라인 코드 | 3,771 | 83 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/ChunkExecutionRepository.kt` | 현재 파이프라인 코드 | 8,694 | 251 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2922,7 +3117,7 @@
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/OcidMappingMergePolicy.kt` | 현재 파이프라인 코드 | 1,397 | 38 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/repository/OcidMappingRepository.kt` | 현재 파이프라인 코드 | 2,499 | 72 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/resolver/OcidUserIgnResolver.kt` | 현재 파이프라인 코드 | 1,460 | 42 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt` | 현재 파이프라인 코드 | 5,096 | 125 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/main/kotlin/maple/synchronizer/service/BasicChunkIngestionService.kt` | 현재 파이프라인 코드 | 4,838 | 118 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/service/OcidLookupService.kt` | 현재 파이프라인 코드 | 1,823 | 52 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/state/ChunkExecutionStateMachine.kt` | 현재 코드 | 4,138 | 87 | 수동 심층 검토+교차검증 |
 | `module-synchronizer/src/main/kotlin/maple/synchronizer/state/ChunkExecutionStatus.kt` | 현재 파이프라인 코드 | 4,423 | 91 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -2934,16 +3129,19 @@
 | `module-synchronizer/src/main/resources/logback-spring.xml` | 현재 파이프라인 코드 | 2,658 | 67 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/adapter/chunk/ChunkPipelineOrchestratorTest.kt` | 테스트 | 7,353 | 185 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/builder/EquipmentDocumentBuilderTest.kt` | 테스트 | 1,872 | 53 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/ChunkConsumerMappingTest.kt` | 테스트 | 4,746 | 115 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplateTest.kt` | 테스트 | 12,256 | 284 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/config/SynchronizerExecutorConfigurationTest.kt` | 테스트 | 6,080 | 146 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/ChunkConsumerMappingTest.kt` | 테스트 | 5,223 | 129 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/ChunkConsumerTemplateTest.kt` | 테스트 | 10,868 | 276 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/consumer/SynchronizerSubscriptionsTest.kt` | 테스트 | 6,946 | 150 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/event/ResultChunkEventPathBuilderTest.kt` | 테스트 | 546 | 18 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/metrics/ChunkExecutionMetricsTest.kt` | 테스트 | 3,610 | 84 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/metrics/DocumentVolumeMetricsTest.kt` | 테스트 | 3,981 | 86 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/preparer/EquipmentDocumentPreparerTest.kt` | 테스트 | 3,011 | 80 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/processor/DefaultChunkProcessorTest.kt` | 테스트 | 2,708 | 77 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/ranking/EquipmentRankingRedisWriterTest.kt` | 테스트 | 6,228 | 168 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/repository/ChunkExecutionRepositoryTest.kt` | 테스트 | 14,567 | 368 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/resolver/OcidUserIgnResolverTest.kt` | 테스트 | 1,822 | 53 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt` | 테스트 | 2,850 | 82 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
+| `module-synchronizer/src/test/kotlin/maple/synchronizer/service/BasicChunkIngestionServiceTest.kt` | 테스트 | 3,047 | 82 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/service/OcidLookupServiceTest.kt` | 테스트 | 4,867 | 121 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/state/ChunkExecutionStatusTest.kt` | 테스트 | 4,668 | 113 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `module-synchronizer/src/test/kotlin/maple/synchronizer/storage/DefaultChunkFileReaderTest.kt` | 테스트 | 4,103 | 94 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
@@ -3030,7 +3228,7 @@
 | `scripts/systemd/maple-external-api.service` | 설정·기타 | 724 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `scripts/systemd/maple-synchronizer.service` | 설정·기타 | 729 | 27 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `scripts/validate-minio-vs3.sh` | 설정·기타 | 7,517 | 203 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
-| `settings.gradle` | 현재 시스템 | 1,006 | 36 | 수동 심층 검토+교차검증 |
+| `settings.gradle` | 현재 시스템 | 1,333 | 45 | 수동 심층 검토+교차검증 |
 | `skills-lock.json` | 설정·기타 | 5,349 | 135 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `supabase/.gitignore` | 설정·기타 | 72 | 8 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |
 | `supabase/config.toml` | 빌드·배포·설정 | 14,926 | 406 | 전수 경로/텍스트 기계 색인; 주장 채택 시 원문 재검증 |

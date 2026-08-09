@@ -29,7 +29,7 @@
 ### E-003 — upload 완료 뒤 이벤트 발행과 bounded backpressure
 
 - 최종 주장: bounded queue와 단일 writer로 메모리를 제한하고, 비동기 object upload가 성공한 뒤에만 chunk-ready 이벤트를 발행하도록 순서를 고정했다.
-- 코드: `ChunkedSnapshotSink.kt:18-24`, `:42-65`, `:194-223`, `:307-344`; `CalculationResultWriter.kt:52-73`, `:75-145`(T1).
+- 코드: `ChunkedSnapshotSink.kt:18-24`, `:42-65`, `:194-223`, `:307-344`; `CalculationResultWriter.kt:54-82`; `module-pipeline-artifact/.../ArtifactWriter.kt:13-45`; `.../GzipArtifactSession.kt:42-57`, `:75-87`, `:100-131`(T1).
 - Git/GitHub: PR [#1283](https://github.com/zbnerd/probabilistic-valuation-engine/pull/1283), [#1294](https://github.com/zbnerd/probabilistic-valuation-engine/pull/1294), [#1307](https://github.com/zbnerd/probabilistic-valuation-engine/pull/1307).
 - 내 기여: blocking upload/close와 publish-before-visible race를 분리해 callback 순서를 설계하고 실패 시 publish를 건너뛰는 경계를 구현.
 - 한계: 주석 속 과거 지연 숫자는 별도 원시 측정 없이는 최종 성과 수치로 쓰지 않았다. upload-success callback 관련 PR #1283/#1294/#1307은 2026-06월 변경으로 2026-05월 82시간 run보다 뒤다. 따라서 82시간 수치를 현 callback 경계의 장기 회귀 증거로 사용하지 않는다.
@@ -37,16 +37,16 @@
 
 ### E-004 — at-least-once 소비의 멱등·재처리 경계
 
-- 최종 주장: 결정적 결과 object key, 결과 존재 시 재계산 대신 이벤트 재발행, 성공 처리 뒤 수동 ACK, read-model `ON CONFLICT` upsert로 중복 전달을 안전하게 흡수했다.
-- 코드: `CalculatorChunkProcessingCoordinator.kt:67-99`, `:132-179`; `SnapshotDispatchService.kt:28-70`; `EquipmentReadModelRepository.kt:17-41`(T1).
+- 최종 주장: 결정적 결과 object key, 결과 존재 시 재계산 대신 이벤트 재발행, handler 성공 뒤 수동 ACK, read-model `ON CONFLICT` upsert, durable cleanup inbox로 중복 전달을 단계별로 흡수했다.
+- 코드: `CalculatorChunkProcessingCoordinator.kt:61-101`, `:134-181`; `module-pipeline-messaging/.../KafkaDeliveryAdapter.kt:34-82`; `.../PartitionLane.kt:78-115`; `.../PipelineKafkaConsumerConfiguration.kt:31-41`; `EquipmentReadModelRepository.kt:17-41`; `ConsumedChunkInbox.kt:17-52`; `ObjectStorageCleanupInboxStore.kt:12-64`(T1).
 - 내 기여: “한 번만 전달”을 가정하지 않고 artifact 존재·ACK·DB 투영 각각에 재처리 규칙을 둠.
-- 한계: 로컬 HEAD의 cleanup inbox는 메모리 queue이며 overflow 시 oldest drop(`ConsumedChunkInbox.kt:13-61`)이다. 따라서 이 HEAD만 근거로 cleanup까지 end-to-end exactly-once 또는 durable하다고 쓰지 않는다. 2026-07-20 PR #1463의 durable inbox는 별도 최신 ref 성과로 구분한다.
+- 한계: 현재 cleanup inbox는 object storage에 `putIfAbsent`로 영속화되고 동일 payload replay를 구분하지만, Kafka ACK·object storage·worker 처리·DB 투영이 하나의 원자 transaction은 아니다. 따라서 end-to-end exactly-once로 표현하지 않는다.
 - 상태: 채택(정확히 at-least-once + idempotent 처리로 표현).
 
 ### E-004A — pipe streaming data-loss race를 temp-file async upload로 교체
 
 - 최종 주장: calculator의 `PipedInputStream`/`PipedOutputStream` + SDK background reader가 경쟁해 0-byte/truncated gzip을 만들던 설계를 폐기하고, gzip temp file을 완전히 닫은 뒤 `putFileAsync`로 업로드하도록 교체했다.
-- 코드/결정: `module-calculator/src/main/kotlin/maple/calculator/writer/CalculationResultWriter.kt:52-145`; Accepted `docs/01_ADR/ADR-730_calculator-writer-temp-file-upload.md:9-66`(T1/T3).
+- 코드/결정: corrective commit `205ce14b814b98cf1533a8072d1393dca9cfd310`의 writer diff; 현재 `CalculationResultWriter.kt:54-81`, `module-pipeline-artifact/.../ArtifactWriter.kt:13-45`, `.../GzipArtifactSession.kt:26-87`, `:100-147`; Accepted `docs/01_ADR/ADR-730_calculator-writer-temp-file-upload.md:9-66`(T1/T3).
 - Git/GitHub: 실패 설계 commit `85b5528df557377675b080edfe7d6515c9993461`(2026-06-20) → corrective commit `205ce14b814b98cf1533a8072d1393dca9cfd310`과 merged PR [#1325](https://github.com/zbnerd/probabilistic-valuation-engine/pull/1325)(2026-06-22).
 - 내 기여: “중간 disk I/O가 없는 streaming” 선택이 SDK reader lifecycle과 맞지 않음을 재현하고, throughput보다 artifact correctness를 우선해 disk-backed staging으로 의사결정·구현.
 - 검증 결과: 2026-06-22 MinIO E2E, internal ITEM_EQUIPMENT trigger(`runId=verify-writer-fix-1`). before는 processed chunks 0, 이전 artifact 0 bytes, 9분간 `Read end dead` 약 14,921건. after는 processed 64 chunks, failed 0, calculated 1,948,957 items, 해당 오류 0, 다운로드한 gzip 674,986 bytes/30,507 valid JSONL rows(`ADR-730:70-91`).
@@ -98,7 +98,7 @@
 - 최종 주장: 2026-07-20 merged PR #1463 final tip `1f47173e3`에서 artifact/Kafka 구현 모듈, `module-core`의 pure valuation kernel, Nexon client와 worker-owned runtime 경계를 분리하고 active worker의 `module-infra` 직접 runtime dependency를 3개→0개로 줄인 상태를 확인했다. cleanup worker는 inbox subscription/processing을, `module-pipeline-artifact`는 durable inbox store를 소유한다. focused test 86개 통과와 4 worker bootJar 빌드는 tip 직전 closure-evidence commit `11ee3c727` 기준이다.
 - 근거: ref `refactor/etl-infra-deepening` final tip `1f47173e3`의 source/runtime dependency graph(T1); `docs/05_Reports/2026-07-19-etl-runtime-ownership-closure-evidence.md:111-170`과 commit `11ee3c727`(T1/T2); merged PR [#1463](https://github.com/zbnerd/probabilistic-valuation-engine/pull/1463)(T4).
 - 내 기여: 공용 `module-infra`의 우연한 의존성을 worker-owned runtime resource와 전용 artifact/messaging 계약으로 재배치하고 dependency guard를 build gate로 고정.
-- 한계: 이 변경은 로컬 HEAD `4da39850b`의 후속 42개 branch commit이며 GitHub상 develop에 merge된 상태다. closure evidence 뒤 final tip commit에서 production subscription class 4개와 test file 2개가 변경됐으며, 이 마지막 수정을 포함한 focused-test/bootJar 재실행 증거는 없다. 보고서는 root/full check, Testcontainers, load/performance run도 생략했다(`:200-206`). 성능 개선으로 표현하지 않는다.
+- 한계: 이 source tip은 현재 checkout의 조상이고 GitHub상 develop에 merge됐다. closure evidence 뒤 final tip commit에서 production subscription class 4개와 test file 2개가 변경됐으며, 이 마지막 수정을 포함한 **당시** focused-test/bootJar 재실행 증거는 없다. 보고서는 root/full check, Testcontainers, load/performance run도 생략했다(`:200-206`). 이번 문서 갱신에서도 application full/load test를 실행하지 않았으므로 성능 개선으로 표현하지 않는다.
 - 상태: 채택(시점/ref·검증 범위 명시).
 
 ### E-011 — 과거 read-path 실데이터 벤치마크
@@ -137,16 +137,16 @@
 
 ### E-014 — Git commit 전수 조사
 
-- 범위: `git rev-list --all` 고유 2,342개(2025-07-30~2026-07-20), merge 377, revert 7.
+- 범위: 2026-08-09 publish 전 fetch 시점 `git rev-list --all` 고유 2,396개(merge 380, revert 7, root 1). 새로 도달한 `origin/master`의 PR #1462 merge까지 포함했다.
 - 산출물: `commit_inventory.csv`.
-- 검증: CSV hash set과 Git hash set의 완전 일치, 통계·파일·요약을 동일 parent policy로 대조, UTF-8/RFC4180/PII·credential/formula 안전성 확인.
+- 검증: CSV hash set과 Git hash set의 완전 일치, root는 empty-tree·일반 commit은 parent·merge는 first-parent 정책으로 통계/파일/patch signal을 대조, UTF-8/RFC4180/PII·credential/formula 안전성 확인.
 - 상태: 최종 독립 재검증 결과를 인벤토리와 함께 사용.
 
 ### E-015 — GitHub PR/이슈 전수 조사
 
-- 범위: PR 709/709 unique, issue 752/752 unique. REST pagination, Search total, GraphQL total이 각각 일치.
+- 범위: 2026-08-08 기준 PR 710/710 unique, issue 752/752 unique. REST pagination, Search total, GraphQL total이 각각 일치.
 - 산출물: `pr_inventory.md`, `issue_inventory.md`.
-- 제한: 마지막 209개 PR의 상세 GraphQL 요청이 반복 HTTP 502여서 review/discussion/commit/formal link/file metadata는 inaccessible로 명시했다. PR 번호·상태·merge metadata는 REST로 보존했다. 핵심 PR은 로컬 diff 또는 개별 GitHub API로 별도 교차검증했다.
+- 검증: 2026-08-01 aggregate GraphQL에서 HTTP 502였던 209개 PR과 후속 #1464를 2026-08-08에 개별 pagination으로 재수집해 `pr_detail_inventory.jsonl`에 보존했다. PR #1196의 API 250-commit cap은 total=288·API 반환 subset과 로컬 `head ^base` 288개 reachable object/merge parent를 교차검증했다. 텍스트 issue 언급은 formal close와 분리하며 해결 증거로 승격하지 않는다.
 
 ### E-016 — 원본 PDF 전수 조사
 
@@ -164,7 +164,7 @@
 | R-004 | producer serialization로 ≥150 files/s 달성 | 보류 | ADR-729 `Observed Result: TBD`; 목표와 관측을 분리해야 함 |
 | R-005 | flush-time rollup으로 파일 10~100배 감소 | 기각(성과) | ADR-743 `Proposed`, implementation out of scope; 추정치 |
 | R-006 | PR #1452의 Kafka/MinIO tuning 적용 | 기각 | GitHub상 closed-unmerged |
-| R-007 | end-to-end exactly-once | 기각 | Kafka/ACK/upsert는 at-least-once + idempotent 경계이며 로컬 HEAD cleanup inbox는 in-memory/drop-oldest |
+| R-007 | end-to-end exactly-once | 기각 | 현재 cleanup inbox는 durable하지만 Kafka ACK·artifact·worker 처리·DB upsert 전체가 하나의 원자 transaction은 아니며 at-least-once + idempotent 경계임 |
 | R-008 | PR/이슈 closed = 해결/배포 | 기각 | merged PR/actual diff가 없는 closed issue는 해결 미검증 |
 | R-009 | 선형 scale-out 또는 환산 330K RPS | 기각 | 실측이 아닌 추정/응답 크기 환산 |
 | R-010 | 80시간 전체 인프라 무장애 | 기각 | Airflow scheduler password drift로 359 restarts 기록 |

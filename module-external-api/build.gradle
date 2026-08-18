@@ -13,7 +13,9 @@ plugins {
 dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
-	implementation project(':module-infra')
+	implementation project(':module-pipeline-artifact')
+	implementation project(':module-pipeline-messaging')
+	implementation project(':module-nexon-client')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
@@ -61,8 +63,12 @@ dependencies {
 	// and org.apache.hadoop.mapreduce.lib.input.FileInputFormat (used by
 	// AvroParquetReader). Runtime stays clean — hadoop does not leak into the
 	// production runtime classpath.
-	testImplementation('org.apache.hadoop:hadoop-common:3.3.6')
-	testImplementation('org.apache.hadoop:hadoop-mapreduce-client-core:3.3.6')
+	testImplementation('org.apache.hadoop:hadoop-common:3.3.6') {
+		exclude group: 'org.slf4j', module: 'slf4j-reload4j'
+	}
+	testImplementation('org.apache.hadoop:hadoop-mapreduce-client-core:3.3.6') {
+		exclude group: 'org.slf4j', module: 'slf4j-reload4j'
+	}
 }
 
 // bootJar enabled — standalone executable application

@@ -12,7 +12,8 @@ plugins {
 dependencies {
 	implementation project(':module-common')
 	implementation project(':module-core')
-	implementation project(':module-infra')
+	implementation project(':module-pipeline-artifact')
+	implementation project(':module-pipeline-messaging')
 
 	implementation(libs.kotlin.stdlib)
 	implementation(libs.kotlin.reflect)
@@ -32,6 +33,7 @@ dependencies {
 	// Jackson
 	implementation(libs.jackson.databind)
 	implementation(libs.jackson.module.kotlin)
+	implementation(libs.jackson.dataformat.csv)
 
 	// Cache
 	implementation(libs.caffeine)
@@ -69,4 +71,3 @@ tasks.named("jar") {
 	enabled = true
 	archiveClassifier = "plain"
 }
-

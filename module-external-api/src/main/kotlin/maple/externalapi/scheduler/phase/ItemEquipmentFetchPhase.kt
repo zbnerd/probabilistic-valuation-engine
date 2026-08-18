@@ -15,6 +15,7 @@ import maple.externalapi.metrics.SnapshotFetchMetrics
 import maple.externalapi.runstatus.PipelinePhase
 import maple.externalapi.snapshot.EndpointSinkFactory
 import maple.externalapi.snapshot.SnapshotChunkingProperties
+import maple.pipeline.artifact.lifecycle.RunLifecycle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -40,7 +41,7 @@ class ItemEquipmentFetchPhase(
     private val batchSize: Int,
     private val clock: Clock = Clock.systemUTC(),
     private val runIdGenerator: RunIdGenerator,
-    private val runMarkerWriter: RunMarkerWriter,
+    private val runLifecycle: RunLifecycle,
     private val schedulerProgressLogger: SchedulerProgressLogger,
 ) {
     private val log = LoggerFactory.getLogger(ItemEquipmentFetchPhase::class.java)
@@ -53,47 +54,57 @@ class ItemEquipmentFetchPhase(
 
         val effectiveRunId = runId ?: runIdGenerator.newRunId()
         val chunkConfig = chunkingProperties.configFor("item-equipment")
-        val runKey = "runs/$effectiveRunId/item-equipment"
-        runMarkerWriter.writeRunMarker(runKey)
-        val sink = sinkFactory.createForItemEquipment(runKey)
+        return runLifecycle.startEndpoint(effectiveRunId, ITEM_EQUIPMENT_ENDPOINT).thenCompose {
+            val sink = sinkFactory.createForItemEquipment(effectiveRunId)
+            val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
 
-        val rateLimiter = batchSupport.newRateLimiter(permitsPerSecond)
-
-        log.info("[Scheduler] ========== item-equipment lookup start ==========")
-        log.info(
-            "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
-            entries.size,
-            permitsPerSecond,
-            batchSize,
-            chunkConfig.maxRecords,
-            chunkConfig.maxUncompressedBytes,
-            effectiveRunId,
-        )
-
-        val start = Instant.now(clock)
-        val ctx = BatchFetchContext(
-            endpoint = "item-equipment",
-            phase = PipelinePhase.ITEM_EQUIPMENT,
-            apiEndpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
-            onFetched = { metrics.recordItemEquipmentFetched() },
-            onFailed = { metrics.recordItemEquipmentFailed() },
-        )
-
-        val dispatcher = workerExecutor.asCoroutineDispatcher()
-        return CoroutineScope(dispatcher).future {
-            val (successCount, failCount) = batchSupport.processBatch(
-                rateLimiter,
-                entries,
+            log.info("[Scheduler] ========== item-equipment lookup start ==========")
+            log.info(
+                "[Scheduler] config: total={}, rate={}/s, batchSize={}, chunk={}records/{}bytes, runId={}",
+                entries.size,
+                permitsPerSecond,
                 batchSize,
-                ctx,
-                sink,
+                chunkConfig.maxRecords,
+                chunkConfig.maxUncompressedBytes,
                 effectiveRunId,
-                start,
             )
-            schedulerProgressLogger.logSummary("item-equipment", entries.size, successCount, successCount, failCount, start)
-        }.thenCompose {
-            metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))
-            sink.closeAsync().thenApply { Unit }
+
+            val start = Instant.now(clock)
+            val ctx = BatchFetchContext(
+                endpoint = ITEM_EQUIPMENT_ENDPOINT,
+                phase = PipelinePhase.ITEM_EQUIPMENT,
+                apiEndpoint = ExternalApiEndpoint.ITEM_EQUIPMENT,
+                onFetched = { metrics.recordItemEquipmentFetched() },
+                onFailed = { metrics.recordItemEquipmentFailed() },
+            )
+
+            val dispatcher = workerExecutor.asCoroutineDispatcher()
+            CoroutineScope(dispatcher).future {
+                val (successCount, failCount) = batchSupport.processBatch(
+                    rateLimiter,
+                    entries,
+                    batchSize,
+                    ctx,
+                    sink,
+                    effectiveRunId,
+                    start,
+                )
+                schedulerProgressLogger.logSummary(
+                    ITEM_EQUIPMENT_ENDPOINT,
+                    entries.size,
+                    successCount,
+                    successCount,
+                    failCount,
+                    start,
+                )
+            }.thenCompose {
+                metrics.itemEquipmentTimer().record(Duration.between(start, Instant.now(clock)))
+                sink.closeAsync().thenApply { Unit }
+            }
         }
+    }
+
+    private companion object {
+        const val ITEM_EQUIPMENT_ENDPOINT: String = "item-equipment"
     }
 }

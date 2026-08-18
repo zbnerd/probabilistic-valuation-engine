@@ -4,20 +4,23 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
-import maple.expectation.infrastructure.storage.LocalFsObjectStorage
 import maple.externalapi.artifact.UrgentChunkArtifactWriter
 import maple.externalapi.domain.ExternalApiEndpoint
 import maple.externalapi.domain.ExternalApiProvider
 import maple.externalapi.event.UrgentEventPublisher
 import maple.externalapi.parser.UrgentOcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
+import maple.pipeline.artifact.storage.LocalFsObjectStorage
+import maple.pipeline.artifact.write.DefaultArtifactWriter
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,9 +32,9 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.timeout
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.SendResult
 
 class UrgentCharacterRequestConsumerTest {
@@ -56,10 +59,17 @@ class UrgentCharacterRequestConsumerTest {
             meterRegistry = null,
         )
 
+        consumer = buildConsumer(maxConcurrent = 30)
+    }
+
+    private fun buildConsumer(maxConcurrent: Int): UrgentCharacterRequestConsumer {
         val ocidResponseParser = UrgentOcidResponseParser(objectMapper)
         val chunkArtifactWriter = UrgentChunkArtifactWriter(
             objectMapper = objectMapper,
-            objectStorage = objectStorage,
+            artifactWriter = DefaultArtifactWriter(
+                objectStorage,
+                java.util.concurrent.Executor { command -> command.run() },
+            ),
         )
         val eventPublisher = UrgentEventPublisher(
             kafkaTemplate = kafkaTemplate,
@@ -68,12 +78,12 @@ class UrgentCharacterRequestConsumerTest {
             urgentChunkReadyTopic = "external-api.urgent.snapshot.chunk-ready",
         )
 
-        consumer = UrgentCharacterRequestConsumer(
+        return UrgentCharacterRequestConsumer(
             clientPort = clientPort,
             ocidResponseParser = ocidResponseParser,
             chunkArtifactWriter = chunkArtifactWriter,
             eventPublisher = eventPublisher,
-            maxConcurrent = 30,
+            maxConcurrent = maxConcurrent,
             executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor(),
         )
     }
@@ -117,10 +127,8 @@ class UrgentCharacterRequestConsumerTest {
         whenever(kafkaTemplate.send(any(), any(), any()))
             .thenReturn(stubSendResult())
 
-        val acknowledgment = mock<Acknowledgment>()
-
         // When
-        consumer.consume(message, acknowledgment)
+        val delivery = consumer.consume(message).toCompletableFuture()
 
         // Then - verify 2 chunk-ready events published
         val captor = argumentCaptor<String>()
@@ -141,21 +149,20 @@ class UrgentCharacterRequestConsumerTest {
         // poll for the keys to appear (the kafkaTemplate.send verification above already waits 5s).
         val urgentKeys = awaitKeys("runs/", "urgent-", ".jsonl.gz", expected = 2, timeoutMs = 5_000)
         assertThat(urgentKeys).hasSize(2)
+        await().atMost(Duration.ofSeconds(5)).until(delivery::isDone)
+        assertThat(delivery.resultNow()).isEqualTo(maple.pipeline.messaging.contract.DeliveryOutcome.Success)
     }
 
     private fun awaitKeys(prefix: String, mustContain: String, suffix: String, expected: Int, timeoutMs: Long): List<String> {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            val keys = objectStorage.listByPrefix(prefix)
-                .map { it.key }
-                .filter { it.contains(mustContain) && it.endsWith(suffix) }
-            if (keys.size >= expected) return keys
-            Thread.sleep(50)
+        await().atMost(Duration.ofMillis(timeoutMs)).untilAsserted {
+            assertThat(matchingKeys(prefix, mustContain, suffix)).hasSizeGreaterThanOrEqualTo(expected)
         }
-        return objectStorage.listByPrefix(prefix)
-            .map { it.key }
-            .filter { it.contains(mustContain) && it.endsWith(suffix) }
+        return matchingKeys(prefix, mustContain, suffix)
     }
+
+    private fun matchingKeys(prefix: String, mustContain: String, suffix: String): List<String> = objectStorage.listByPrefix(prefix)
+        .map { it.key }
+        .filter { it.contains(mustContain) && it.endsWith(suffix) }
 
     @Test
     fun `not-found path - OCID response missing ocid field publishes not-found event`() {
@@ -176,10 +183,8 @@ class UrgentCharacterRequestConsumerTest {
         whenever(kafkaTemplate.send(any(), any(), any()))
             .thenReturn(stubSendResult())
 
-        val acknowledgment = mock<Acknowledgment>()
-
         // When
-        consumer.consume(message, acknowledgment)
+        val delivery = consumer.consume(message).toCompletableFuture()
 
         // Then
         val captor = argumentCaptor<String>()
@@ -195,5 +200,51 @@ class UrgentCharacterRequestConsumerTest {
 
         // No chunk objects created
         assertThat(objectStorage.listByPrefix("runs/")).isEmpty()
+        await().atMost(Duration.ofSeconds(5)).until(delivery::isDone)
+        assertThat(delivery.resultNow()).isEqualTo(maple.pipeline.messaging.contract.DeliveryOutcome.Success)
+    }
+
+    @Test
+    fun `semaphore exhaustion returns Backpressure without starting work`() {
+        val noCapacityConsumer = buildConsumer(maxConcurrent = 0)
+        val message = objectMapper.writeValueAsString(
+            UrgentCharacterRequest(
+                eventId = "event-backpressure",
+                userIgn = "BusyCharacter",
+                requestedAt = Instant.EPOCH,
+            ),
+        )
+
+        val outcome = noCapacityConsumer.consume(message).toCompletableFuture().resultNow()
+
+        assertThat(outcome).isInstanceOf(maple.pipeline.messaging.contract.DeliveryOutcome.Backpressure::class.java)
+        verifyNoInteractions(clientPort)
+    }
+
+    @Test
+    fun `chunk send failure returns Retryable`() {
+        val userIgn = "RetryCharacter"
+        val ocid = "retry-ocid"
+        val message = objectMapper.writeValueAsString(
+            UrgentCharacterRequest(
+                eventId = "event-retry",
+                userIgn = userIgn,
+                requestedAt = Instant.EPOCH,
+            ),
+        )
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.OCID_LOOKUP, userIgn))
+            .thenReturn(CompletableFuture.completedFuture("""{"ocid":"$ocid"}""".toByteArray()))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.CHARACTER_BASIC, ocid))
+            .thenReturn(CompletableFuture.completedFuture("{}".toByteArray()))
+        whenever(clientPort.fetch(ExternalApiProvider.NEXON, ExternalApiEndpoint.ITEM_EQUIPMENT, ocid))
+            .thenReturn(CompletableFuture.completedFuture("{}".toByteArray()))
+        whenever(kafkaTemplate.send(any(), any(), any()))
+            .thenReturn(CompletableFuture.failedFuture(IllegalStateException("send failed")))
+
+        val delivery = consumer.consume(message).toCompletableFuture()
+        await().atMost(Duration.ofSeconds(5)).until(delivery::isDone)
+
+        assertThat(delivery.resultNow())
+            .isInstanceOf(maple.pipeline.messaging.contract.DeliveryOutcome.Retryable::class.java)
     }
 }

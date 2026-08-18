@@ -1,9 +1,11 @@
 package maple.externalapi.urgent
 
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Semaphore
 import maple.expectation.common.event.SnapshotChunkReadyEvent
@@ -15,20 +17,14 @@ import maple.externalapi.event.UrgentEventPublisher
 import maple.externalapi.parser.UrgentOcidResponseParser
 import maple.externalapi.port.out.ExternalApiClientPort
 import maple.externalapi.snapshot.SnapshotChunkRecord
+import maple.pipeline.messaging.contract.CompletionFailures
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
 
 @Component
-@ConditionalOnProperty(
-    name = ["external-api.urgent.enabled"],
-    havingValue = "true",
-    matchIfMissing = false,
-)
 class UrgentCharacterRequestConsumer(
     private val clientPort: ExternalApiClientPort,
     private val ocidResponseParser: UrgentOcidResponseParser,
@@ -42,38 +38,32 @@ class UrgentCharacterRequestConsumer(
     private val log = LoggerFactory.getLogger(javaClass)
     private val semaphore = Semaphore(maxConcurrent)
 
-    @KafkaListener(
-        topics = ["\${external-api.urgent.request-topic}"],
-        groupId = "\${external-api.urgent.consumer-group-id}",
-    )
-    fun consume(message: String, acknowledgment: Acknowledgment) {
-        val request = ocidResponseParser.parseRequest(message)
+    fun consume(message: String): CompletionStage<DeliveryOutcome> {
+        val request = runCatching { ocidResponseParser.parseRequest(message) }.getOrElse {
+            return CompletableFuture.completedFuture(DeliveryOutcome.InvalidMessage(INVALID_MESSAGE))
+        }
         log.info("[Urgent] received: userIgn={}", maskIgn(request.userIgn))
 
         if (!semaphore.tryAcquire()) {
-            log.warn("[Urgent] backpressure: semaphore exhausted, skipping userIgn={}", maskIgn(request.userIgn))
-            acknowledgment.acknowledge()
-            return
+            log.warn("[Urgent] backpressure: semaphore exhausted, userIgn={}", maskIgn(request.userIgn))
+            return CompletableFuture.completedFuture(DeliveryOutcome.Backpressure(CAPACITY_BACKPRESSURE))
         }
 
-        processUrgentCharacterAsync(request)
-            .handle { _, ex ->
-                // .handle fires on normal AND exceptional completion. Re-throw via `ex`
-                // so the outer .whenComplete below receives the failure.
-                if (ex != null) {
-                    log.error("[Urgent] failed: userIgn={}", maskIgn(request.userIgn), ex)
-                } else {
-                    log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
-                }
-                ex
+        val processing = runCatching { processUrgentCharacterAsync(request) }.getOrElse { failure ->
+            CompletableFuture.failedFuture(failure)
+        }
+        val outcome = processing.handle { _, failure ->
+            if (failure == null) {
+                log.info("[Urgent] completed: userIgn={}", maskIgn(request.userIgn))
+                DeliveryOutcome.Success
+            } else {
+                val cause = CompletionFailures.unwrap(failure)
+                log.error("[Urgent] failed: userIgn={}", maskIgn(request.userIgn), cause)
+                DeliveryOutcome.Retryable(cause)
             }
-            .whenComplete { _, _ ->
-                // .whenComplete always fires (success, failure, AND cancellation).
-                // Cancel-safe: even if the CF is cancelled, the permit is released here.
-                semaphore.release()
-                runCatching { acknowledgment.acknowledge() }
-                    .onFailure { log.warn("[Urgent] ACK failed: userIgn={}", maskIgn(request.userIgn)) }
-            }
+        }
+        outcome.whenComplete { _, _ -> semaphore.release() }
+        return outcome
     }
 
     private fun processUrgentCharacterAsync(request: UrgentCharacterRequest): CompletableFuture<Void> = clientPort.fetch(
@@ -139,9 +129,9 @@ class UrgentCharacterRequestConsumer(
         key: String,
         data: ByteArray,
         keyType: String,
-    ): CompletableFuture<Void> = CompletableFuture.supplyAsync({
+    ): CompletableFuture<Void> {
         val endpointDir = endpoint.storageSubDir()
-        val objectKey = chunkArtifactWriter.writeChunk(
+        val receiptStage = chunkArtifactWriter.writeChunk(
             runId = runId,
             endpointDir = endpointDir,
             record = SnapshotChunkRecord.Success(
@@ -153,19 +143,21 @@ class UrgentCharacterRequestConsumer(
                 bodyBytes = data,
             ),
         )
-        SnapshotChunkReadyEvent(
-            eventId = UUID.randomUUID().toString(),
-            runId = runId,
-            endpoint = endpointDir,
-            chunkId = "$endpointDir-part-000001",
-            objectKey = objectKey,
-            recordCount = 1,
-            uncompressedBytes = data.size.toLong(),
-            compressedBytes = -1L,
-            createdAt = Instant.now(clock),
-        )
-    }, executor).thenCompose { event ->
-        eventPublisher.publishChunkReady(event)
+        return receiptStage.thenCompose { receipt ->
+            eventPublisher.publishChunkReady(
+                SnapshotChunkReadyEvent(
+                    eventId = UUID.randomUUID().toString(),
+                    runId = runId,
+                    endpoint = endpointDir,
+                    chunkId = "$endpointDir-part-000001",
+                    objectKey = receipt.key.value,
+                    recordCount = 1,
+                    uncompressedBytes = data.size.toLong(),
+                    compressedBytes = -1L,
+                    createdAt = Instant.now(clock),
+                ),
+            )
+        }.toCompletableFuture()
     }
 
     private fun publishNotFoundAsync(userIgn: String): CompletableFuture<Void> = eventPublisher.publishNotFound(
@@ -181,3 +173,6 @@ data class UrgentCharacterRequest(
     val presetNo: Int = 1,
     val requestedAt: Instant,
 )
+
+private const val INVALID_MESSAGE = "INVALID_MESSAGE"
+private val CAPACITY_BACKPRESSURE: Duration = Duration.ofSeconds(1)

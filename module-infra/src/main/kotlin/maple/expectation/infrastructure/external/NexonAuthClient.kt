@@ -18,11 +18,4 @@ interface NexonAuthClient {
      */
     fun getCharacterList(apiKey: String): Optional<CharacterListResponse>
 
-    /**
-     * API Key 유효성을 검증합니다.
-     *
-     * @param apiKey 사용자의 Nexon API Key
-     * @return 유효 여부
-     */
-    fun validateApiKey(apiKey: String): Boolean
 }

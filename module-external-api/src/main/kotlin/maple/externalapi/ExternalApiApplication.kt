@@ -1,14 +1,10 @@
 package maple.externalapi
 
-import maple.expectation.infrastructure.config.KafkaConsumerConfig
-import maple.expectation.infrastructure.config.MaplestoryApiConfig
-import maple.expectation.infrastructure.config.TimeoutProperties
-import maple.expectation.infrastructure.external.config.ExternalApiMetricsFilter
-import maple.expectation.infrastructure.external.impl.RealNexonAuthClient
-import maple.expectation.infrastructure.lifecycle.ManagedLifecycleCoordinator
-import maple.externalapi.config.NexonHttpClientProperties
 import maple.externalapi.snapshot.SnapshotChunkingProperties
 import maple.externalapi.snapshot.event.SnapshotEventProperties
+import maple.nexon.client.config.NexonClientAutoConfiguration
+import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
+import maple.pipeline.messaging.config.PipelineKafkaConsumerConfiguration
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -18,10 +14,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication(
-    scanBasePackages = [
-        "maple.externalapi",
-        "maple.expectation.infrastructure.executor",
-    ],
+    scanBasePackages = ["maple.externalapi"],
     exclude = [
         SecurityAutoConfiguration::class,
         SecurityFilterAutoConfiguration::class,
@@ -29,22 +22,14 @@ import org.springframework.scheduling.annotation.EnableScheduling
     ],
 )
 @Import(
-    maple.expectation.infrastructure.config.CoreExecutorConfig::class,
-    maple.expectation.infrastructure.config.VtExecutorConfig::class,
-    maple.expectation.infrastructure.storage.StorageConfig::class,
-    maple.expectation.infrastructure.storage.MinioHealthIndicator::class,
-    KafkaConsumerConfig::class,
-    MaplestoryApiConfig::class,
-    ExternalApiMetricsFilter::class,
-    RealNexonAuthClient::class,
-    ManagedLifecycleCoordinator::class,
+    ArtifactStorageAutoConfiguration::class,
+    PipelineKafkaConsumerConfiguration::class,
+    NexonClientAutoConfiguration::class,
 )
 @EnableScheduling
 @EnableConfigurationProperties(
     SnapshotChunkingProperties::class,
     SnapshotEventProperties::class,
-    NexonHttpClientProperties::class,
-    TimeoutProperties::class,
 )
 class ExternalApiApplication
 

@@ -151,9 +151,15 @@ subprojects {
 
 	// 테스트 설정
 	boolean isCiServer = System.getenv().containsKey("CI")
+	boolean isArtifactEvidence = project.hasProperty('artifactEvidence')
 
 	test {
-		jvmArgs = [
+		jvmArgs = isArtifactEvidence ? [
+			'-Xms1g',
+			'-Xmx1g',
+			'-XX:+UseG1GC',
+			'-XX:MaxMetaspaceSize=512m'
+		] : [
 			'-Xms512m',
 			'-Xmx2048m',
 			'-XX:+UseG1GC',
@@ -344,4 +350,46 @@ tasks.register('loadTestQuick', Exec) {
             throw new GradleException('K6 test file not found: load-test/k6/main.js')
         }
     }
+}
+
+def activeEtlProjectPaths = [
+	':module-external-api',
+	':module-calculator',
+	':module-synchronizer',
+	':module-cleanup',
+]
+
+tasks.register('verifyActiveEtlInfraIsolation') {
+	group = 'verification'
+	description = 'Rejects module-infra source and runtime dependencies in active ETL workers.'
+
+	doLast {
+		def violations = []
+		activeEtlProjectPaths.each { projectPath ->
+			def worker = project(projectPath)
+			worker.fileTree('src/main') {
+				include '**/*.kt', '**/*.java'
+			}.each { source ->
+				if (source.getText('UTF-8').contains('maple.expectation.infrastructure')) {
+					violations << "${projectPath}:source:${worker.relativePath(source)}"
+				}
+			}
+
+			worker.configurations.runtimeClasspath.incoming.resolutionResult.allComponents.each { component ->
+				def id = component.id
+				if (id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier &&
+					id.projectPath == ':module-infra') {
+					violations << "${projectPath}:runtimeClasspath:${component.id.displayName}"
+				}
+			}
+		}
+
+		if (!violations.isEmpty()) {
+			throw new GradleException("Active ETL module-infra isolation violations:\n" + violations.sort().join('\n'))
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn(tasks.named('verifyActiveEtlInfraIsolation'))
 }

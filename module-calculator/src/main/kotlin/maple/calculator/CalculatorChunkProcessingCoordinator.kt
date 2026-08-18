@@ -17,6 +17,7 @@ import maple.expectation.common.event.CalculatorResultChunkReadyEvent
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.storage.ObjectStorage
 import maple.expectation.util.CompressionUtils
+import maple.pipeline.artifact.identity.CalculatorArtifactLayout
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
@@ -96,7 +97,8 @@ class CalculatorChunkProcessingCoordinator(
         }
     }
 
-    fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String = "calculator/runs/${event.runId}/${event.endpoint}/chunks/result-${event.chunkId}.jsonl.gz"
+    fun resultObjectKeyFor(event: SnapshotChunkReadyEvent): String =
+        CalculatorArtifactLayout.resultChunk(event.runId, event.endpoint, event.chunkId).value
 
     /**
      * Probe the source chunk with retry/backoff. Returns true as soon as a

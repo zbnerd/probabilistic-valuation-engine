@@ -1,10 +1,16 @@
 package maple.calculator.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import io.micrometer.core.instrument.MeterRegistry
 import maple.calculator.cache.CacheBackendFactory
 import maple.calculator.cache.CacheConfig
 import maple.calculator.cache.OffHeapCacheBackend
-import maple.calculator.processor.CalculationCache.CacheKey
-import maple.calculator.processor.CalculationCache.ComponentCosts
+import maple.calculator.metrics.ValuationCacheMetrics
+import maple.calculator.processor.ValuationCache
+import maple.calculator.processor.ValuationCacheKey
+import maple.expectation.core.calculation.ValuationKernel
+import maple.expectation.core.calculation.ValuationResult
+import maple.expectation.core.calculation.probability.ProbabilityTableSnapshot
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -29,8 +35,27 @@ class CacheBackendConfig {
         @Value("\${calculator.cache.backend:caffeine}") profile: String,
         @Value("\${calculator.cache.chronicle.path:/var/lib/calculator/chronicle-ocid}") path: String,
         @Value("\${calculator.cache.chronicle.max-entries:100000}") maxEntries: Long,
-    ): OffHeapCacheBackend<CacheKey, ComponentCosts> {
+        objectMapper: ObjectMapper,
+    ): OffHeapCacheBackend<ValuationCacheKey, ValuationResult> {
         val config = CacheConfig(maxEntries = maxEntries, chroniclePath = path)
-        return CacheBackendFactory.create(profile, config, CacheKey::class.java, ComponentCosts::class.java)
+        return CacheBackendFactory.create(
+            profile,
+            config,
+            objectMapper,
+            ValuationCacheKey::class.java,
+            ValuationResult::class.java,
+        )
     }
+
+    @Bean
+    fun valuationCacheMetrics(meterRegistry: MeterRegistry): ValuationCacheMetrics =
+        ValuationCacheMetrics(meterRegistry)
+
+    @Bean
+    fun valuationCache(
+        kernel: ValuationKernel,
+        table: ProbabilityTableSnapshot,
+        backend: OffHeapCacheBackend<ValuationCacheKey, ValuationResult>,
+        metrics: ValuationCacheMetrics,
+    ): ValuationCache = ValuationCache(kernel, table, backend, metrics)
 }

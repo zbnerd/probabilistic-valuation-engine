@@ -1,0 +1,770 @@
+[ {
+  "id" : "full-no-enhancements",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-no-enhancements-level-0",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 0,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-potential-rare-level-100",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 100,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레어",
+    "potentialOptions" : [ "STR +12", "STR +6", "STR +6" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 1.528E9,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 382.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 1.528E9,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-potential-epic-level-100",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 100,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "에픽",
+    "potentialOptions" : [ "STR +6%", "STR +12", "STR +12" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.744E9,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 234.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.744E9,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-potential-unique-level-150",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 150,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "유니크",
+    "potentialOptions" : [ "STR +9%", "STR +6%", "STR +6%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 1.3872E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 408.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 1.3872E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-potential-legendary-level-200",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.1545E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.1545E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-potential-legendary-level-250",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 250,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +13%", "STR +10%", "STR +10%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.505E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.505E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-additional-only-level-100",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 100,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : "레어",
+    "additionalOptions" : [ "STR +10", "STR +6", "STR +6" ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 3.7323E10,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 2871.0,
+    "totalCost" : 3.7323E10,
+    "enhancePath" : "golden-item > 에디셔널큐브(아랫잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-starforce-only-normal-range",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 150,
+    "currentStar" : 10,
+    "targetStar" : 15,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 2.00815384E8,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 2.00815384E8,
+    "enhancePath" : "golden-item > 스타포스(10→15성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-all-components-decorator-order",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 12,
+    "targetStar" : 22,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : "유니크",
+    "additionalOptions" : [ "STR +18", "STR +14", "STR +14" ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.1545E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 2.25403425E11,
+    "starforceCost" : 1.6114343065E10,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 4533.0,
+    "totalCost" : 2.73062768065E11,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠) > 에디셔널큐브(아랫잠) > 스타포스(12→22성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "black-component-entry",
+  "entryPoint" : "BLACK",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.1545E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.1545E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "additional-component-entry",
+  "entryPoint" : "ADDITIONAL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : "유니크",
+    "additionalOptions" : [ "STR +18", "STR +14", "STR +14" ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 2.25403425E11,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 4533.0,
+    "totalCost" : 2.25403425E11,
+    "enhancePath" : "golden-item > 에디셔널큐브(아랫잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "starforce-component-entry",
+  "entryPoint" : "STARFORCE",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 150,
+    "currentStar" : 5,
+    "targetStar" : 12,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 2.2141703E7,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 2.2141703E7,
+    "enhancePath" : "golden-item > 스타포스(5→12성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-current-star-equals-target",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 15,
+    "targetStar" : 15,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-regular-maximum-star",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 250,
+    "currentStar" : 0,
+    "targetStar" : 30,
+    "noljang" : false,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 3.122948146481664E15,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.122948146481664E15,
+    "enhancePath" : "golden-item > 스타포스(0→30성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-noljang-zero-boundary",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : true,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-noljang-eleven-boundary",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 11,
+    "noljang" : true,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 2.4157608E7,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 2.4157608E7,
+    "enhancePath" : "golden-item > 스타포스(0→11성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-noljang-twelve-boundary",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 12,
+    "noljang" : true,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 5.5108041E7,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 5.5108041E7,
+    "enhancePath" : "golden-item > 스타포스(0→12성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-noljang-requested-20-capped-15-regular-cost",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : 20,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 15,
+    "noljang" : true,
+    "potentialGrade" : null,
+    "potentialOptions" : [ ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 4.88041031E8,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 4.88041031E8,
+    "enhancePath" : "golden-item > 스타포스(0→15성)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-secondary-weapon-standard-normalization",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "보조무기",
+    "equipmentPart" : "블레이드",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.78E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 840.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.78E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-secondary-weapon-force-shield-normalization",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "포스실드",
+    "equipmentPart" : "소울링",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.78E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 840.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.78E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-option-order-original",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.1545E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.1545E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-option-order-reordered",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "STR +9%", "STR +12%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 3.1545E10,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 701.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 3.1545E10,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-all-stat-contribution",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "올스탯 +9%", "올스탯 +6%", "올스탯 +6%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "full-compound-option-permutation-fallback",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "레전드리",
+    "potentialOptions" : [ "보스 몬스터 데미지 +40%", "STR +12%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : {
+    "blackCubeCost" : 0.0,
+    "redCubeCost" : 0.0,
+    "additionalCubeCost" : 0.0,
+    "starforceCost" : 0.0,
+    "blackCubeTrials" : 0.0,
+    "redCubeTrials" : 0.0,
+    "additionalCubeTrials" : 0.0,
+    "totalCost" : 0.0,
+    "enhancePath" : "golden-item > 블랙큐브(윗잠)",
+    "tableLogicalVersion" : "csv-v1.0"
+  },
+  "expectedErrorType" : null
+}, {
+  "id" : "unsupported-potential-grade",
+  "entryPoint" : "FULL",
+  "sourceTargetStar" : null,
+  "input" : {
+    "itemName" : "golden-item",
+    "part" : "모자",
+    "equipmentPart" : "모자",
+    "itemLevel" : 200,
+    "currentStar" : 0,
+    "targetStar" : 0,
+    "noljang" : false,
+    "potentialGrade" : "신화",
+    "potentialOptions" : [ "STR +12%", "STR +9%", "STR +9%" ],
+    "additionalGrade" : null,
+    "additionalOptions" : [ ]
+  },
+  "expected" : null,
+  "expectedErrorType" : "maple.expectation.error.exception.InvalidPotentialGradeException"
+} ]

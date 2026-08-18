@@ -1,14 +1,19 @@
 package maple.externalapi.snapshot
 
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicReference
 import maple.expectation.common.event.SnapshotChunkReadyEvent
 import maple.expectation.common.event.SnapshotRunCompletedEvent
 import maple.expectation.common.event.SnapshotRunFailedEvent
 import maple.externalapi.metrics.SnapshotVolumeMetrics
+import maple.pipeline.artifact.identity.ArtifactKey
+import maple.pipeline.artifact.write.ArtifactReceipt
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
@@ -33,20 +38,21 @@ class SnapshotSinkEventPublisherTest {
     fun `publishChunkReady builds event with chunkId objectKey and createdAt`() {
         whenever(sinkEventPublisher.publishChunkReady(any())).thenReturn(CompletableFuture.completedFuture(null))
 
+        val receipt = receipt(
+            key = "runs/run-1/result/chunks/part-000001.jsonl.gz",
+            compressedBytes = 250L,
+            uncompressedBytes = 1000L,
+        )
         val stats = ChunkStats(
-            // GzipJsonlChunkWriter.close() stores `chunkKey.substringAfterLast('/')`
-            // in stats.path — i.e. the filename only. The publisher prepends the
-            // `runs/{runId}/{endpoint}/chunks/` segment.
-            path = "part-000001.jsonl.gz",
             partIndex = 1,
             recordCount = 42,
-            uncompressedBytes = 1000L,
-            compressedBytes = 250L,
+            uncompressedBytes = 999L,
             startedAt = Instant.parse("2026-06-07T09:50:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:55:00Z"),
+            uploadFuture = CompletableFuture.completedFuture(receipt),
         )
 
-        publisher.publishChunkReady(stats, runId = "run-1", endpoint = "result")
+        publisher.publishChunkReady(stats, receipt, runId = "run-1", endpoint = "result")
 
         val captor = argumentCaptor<SnapshotChunkReadyEvent>()
         verify(sinkEventPublisher).publishChunkReady(captor.capture())
@@ -58,6 +64,7 @@ class SnapshotSinkEventPublisherTest {
         assertThat(event.recordCount).isEqualTo(42)
         assertThat(event.uncompressedBytes).isEqualTo(1000L)
         assertThat(event.compressedBytes).isEqualTo(250L)
+        assertThat(event.sha256).isNull()
         assertThat(event.createdAt).isEqualTo(Instant.parse("2026-06-07T10:00:00Z"))
         assertThat(event.eventId).isNotBlank()
     }
@@ -66,17 +73,21 @@ class SnapshotSinkEventPublisherTest {
     fun `publishChunkReady records volume metrics with compressed uncompressed and count`() {
         whenever(sinkEventPublisher.publishChunkReady(any())).thenReturn(CompletableFuture.completedFuture(null))
 
+        val receipt = receipt(
+            key = "runs/run-2/item/chunks/part-000007.jsonl.gz",
+            compressedBytes = 1024L,
+            uncompressedBytes = 4096L,
+        )
         val stats = ChunkStats(
-            path = "chunks/part-000007.jsonl.gz",
             partIndex = 7,
             recordCount = 99,
-            uncompressedBytes = 4096L,
-            compressedBytes = 1024L,
+            uncompressedBytes = 4000L,
             startedAt = Instant.parse("2026-06-07T09:00:00Z"),
             finishedAt = Instant.parse("2026-06-07T09:10:00Z"),
+            uploadFuture = CompletableFuture.completedFuture(receipt),
         )
 
-        publisher.publishChunkReady(stats, "run-2", "item")
+        publisher.publishChunkReady(stats, receipt, "run-2", "item")
 
         verify(volumeMetrics).recordChunk(1024L, 4096L, 99L)
     }
@@ -145,4 +156,87 @@ class SnapshotSinkEventPublisherTest {
         assertThat(event.eventId).isNotBlank()
         verifyNoInteractions(volumeMetrics)
     }
+
+    @Test
+    fun `sink publisher preserves synchronous send failure`() {
+        val delegate = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>()
+        whenever(delegate.publishRunCompleted(any())).thenThrow(IllegalStateException("sync broker failure"))
+        val safePublisher = SinkEventPublisher(delegate)
+
+        val failure = awaitFailure(
+            safePublisher.publishRunCompleted(
+                SnapshotRunCompletedEvent(
+                    eventId = "event-1",
+                    runId = "run-1",
+                    endpoint = "item-equipment",
+                    manifestPath = "runs/run-1/item-equipment/manifest.json",
+                    totalRecords = 0,
+                    totalFailed = 0,
+                    chunkCount = 0,
+                    startedAt = Instant.parse("2026-06-07T09:00:00Z"),
+                    finishedAt = Instant.parse("2026-06-07T10:00:00Z"),
+                    createdAt = Instant.parse("2026-06-07T10:00:00Z"),
+                ),
+            ),
+        )
+
+        assertThat(failure).hasMessage("sync broker failure")
+    }
+
+    @Test
+    fun `sink publisher preserves asynchronous send failure`() {
+        val delegate = mock<maple.externalapi.snapshot.event.SnapshotChunkEventPublisher>()
+        whenever(delegate.publishRunFailed(any()))
+            .thenReturn(CompletableFuture.failedFuture(IllegalStateException("async broker failure")))
+        val safePublisher = SinkEventPublisher(delegate)
+
+        val failure = awaitFailure(
+            safePublisher.publishRunFailed(
+                SnapshotRunFailedEvent(
+                    eventId = "event-2",
+                    runId = "run-1",
+                    endpoint = "item-equipment",
+                    errorMessage = "source failure",
+                    createdAt = Instant.parse("2026-06-07T10:00:00Z"),
+                ),
+            ),
+        )
+
+        assertThat(failure).hasRootCauseMessage("async broker failure")
+    }
+
+    @Test
+    fun `snapshot publisher returns required publication future`() {
+        val requiredSend = CompletableFuture<Void>()
+        whenever(sinkEventPublisher.publishRunCompleted(any())).thenReturn(requiredSend)
+        val manifest = SnapshotChunkManifest(
+            runId = "run-required",
+            endpoint = "item-equipment",
+            startedAt = Instant.parse("2026-06-07T08:00:00Z"),
+            finishedAt = Instant.parse("2026-06-07T09:00:00Z"),
+        )
+
+        val returned = publisher.publishRunCompleted(manifest, "item-equipment")
+
+        assertThat(returned).isSameAs(requiredSend)
+    }
+
+    private fun awaitFailure(future: CompletableFuture<Void>): Throwable {
+        val captured = AtomicReference<Throwable>()
+        future.whenComplete { _, failure -> captured.set(failure) }
+        await().atMost(Duration.ofSeconds(5)).until { captured.get() != null }
+        return requireNotNull(captured.get())
+    }
+
+    private fun receipt(
+        key: String,
+        compressedBytes: Long,
+        uncompressedBytes: Long = 0L,
+    ): ArtifactReceipt = ArtifactReceipt(
+        key = ArtifactKey.require(key),
+        compressedBytes = compressedBytes,
+        uncompressedBytes = uncompressedBytes,
+        contentSha256 = "fixture-sha256",
+        backendTag = null,
+    )
 }

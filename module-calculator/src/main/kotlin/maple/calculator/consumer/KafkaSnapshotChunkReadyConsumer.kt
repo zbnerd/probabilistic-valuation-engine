@@ -1,9 +1,10 @@
 package maple.calculator.consumer
 
 import maple.calculator.parser.SnapshotEventParser
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import maple.pipeline.messaging.contract.DeliveryOutcome
 import org.slf4j.LoggerFactory
-import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
 
 @Component
@@ -13,37 +14,30 @@ class KafkaSnapshotChunkReadyConsumer(
 ) {
     private val log = LoggerFactory.getLogger(KafkaSnapshotChunkReadyConsumer::class.java)
 
-    @KafkaListener(
-        topics = ["\${calculator.kafka.snapshot-chunk-ready-topic}"],
-        groupId = "\${calculator.kafka.consumer-group-id}",
-    )
-    suspend fun consume(message: String, acknowledgment: Acknowledgment) {
-        val event = eventParser.parse(message)
-        log.info(
-            "[Consumer] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
-            event.runId,
-            event.endpoint,
-            event.chunkId,
-            event.objectKey,
-            event.recordCount,
-        )
-        dispatchService.dispatch(event, acknowledgment, label = "Consumer")
-    }
+    fun consume(message: String): CompletionStage<DeliveryOutcome> = handle(message, "Consumer")
 
-    @KafkaListener(
-        topics = ["\${calculator.kafka.urgent-snapshot-chunk-ready-topic}"],
-        groupId = "\${calculator.kafka.urgent-consumer-group-id}",
+    fun consumeUrgent(message: String): CompletionStage<DeliveryOutcome> = handle(message, "URGENT")
+
+    private fun handle(message: String, label: String): CompletionStage<DeliveryOutcome> = runCatching {
+        eventParser.parse(message)
+    }.fold(
+        onSuccess = { event -> dispatch(event, label) },
+        onFailure = { CompletableFuture.completedFuture(DeliveryOutcome.InvalidMessage("INVALID_MESSAGE")) },
     )
-    suspend fun consumeUrgent(message: String, acknowledgment: Acknowledgment) {
-        val event = eventParser.parse(message)
+
+    private fun dispatch(
+        event: maple.expectation.common.event.SnapshotChunkReadyEvent,
+        label: String,
+    ): CompletionStage<DeliveryOutcome> {
         log.info(
-            "[URGENT] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
+            "[{}] received chunk-ready: runId={} endpoint={} chunkId={} objectKey={} recordCount={}",
+            label,
             event.runId,
             event.endpoint,
             event.chunkId,
             event.objectKey,
             event.recordCount,
         )
-        dispatchService.dispatch(event, acknowledgment, label = "URGENT")
+        return dispatchService.dispatch(event, label)
     }
 }

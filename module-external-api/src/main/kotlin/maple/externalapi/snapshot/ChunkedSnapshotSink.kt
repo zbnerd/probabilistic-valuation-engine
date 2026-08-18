@@ -8,6 +8,8 @@ import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import maple.pipeline.artifact.lifecycle.RunLifecycle
+import maple.pipeline.artifact.lifecycle.RunState
 import org.slf4j.LoggerFactory
 
 class ChunkedSnapshotSink(
@@ -15,6 +17,7 @@ class ChunkedSnapshotSink(
     private val queueCapacity: Int,
     private val fileManager: ChunkFileManager,
     private val eventPublisher: SnapshotSinkEventPublisher,
+    private val runLifecycle: RunLifecycle,
     private val writerExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread.ofPlatform().name("snapshot-writer-$endpoint").unstarted(runnable)
     },
@@ -24,6 +27,8 @@ class ChunkedSnapshotSink(
     private val queue = ArrayBlockingQueue<SnapshotChunkRecord>(queueCapacity)
     private val accepting = AtomicBoolean(true)
     private val writerError = AtomicReference<Throwable?>(null)
+    private val lifecycleStarted = AtomicBoolean(false)
+    private val requiredChunkPublishes: MutableList<CompletableFuture<Void>> = mutableListOf()
 
     private val writerFuture: Future<*> = writerExecutor.submit {
         runWriterLoop()
@@ -76,68 +81,6 @@ class ChunkedSnapshotSink(
 
     fun queueDepth(): Int = queue.size
 
-    @Deprecated("Use closeAsync() for non-blocking shutdown; this sync variant holds the calling thread for up to ~10 minutes")
-    fun close() {
-        accepting.set(false)
-        try {
-            if (!queue.offer(SnapshotChunkRecord.CloseSignal, 30, java.util.concurrent.TimeUnit.SECONDS)) {
-                throw IllegalStateException("failed to enqueue close signal after 30s")
-            }
-
-            writerExecutor.shutdown()
-            if (!writerExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
-                log.warn("[Sink] writer executor did not terminate within 60s, forcing shutdown")
-                writerExecutor.shutdownNow()
-            }
-
-            val err = writerError.get()
-            val manifest = fileManager.manifest()
-            if (err != null) {
-                fileManager.cleanupOnFailure()
-                eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
-                throw RuntimeException("writer thread failed: ${err.message}", err)
-            }
-
-            // close current chunk and write manifest + _SUCCESS marker
-            fileManager.closeCurrentChunk()?.let { stats ->
-                publishWhenUploaded(stats)
-            }
-
-            // Wait for all fire-and-forget chunk uploads to complete
-            // BEFORE writing the manifest. Otherwise the manifest would
-            // reference chunks that haven't arrived in MinIO yet, and the
-            // downstream calculator/synchronizer could read incomplete data.
-            // 10 minutes is generous for 128MB × N chunks on a healthy
-            // MinIO; the ChunkFileManager logs the actual timeout.
-            if (!fileManager.awaitAllUploads(600_000L)) {
-                // Uploads timed out or failed — fail the run loudly.
-                val msg = "chunk uploads did not complete in time (in-flight=${fileManager.inFlightUploadCount()})"
-                fileManager.cleanupOnFailure()
-                eventPublisher.publishRunFailed(manifest, endpoint, msg)
-                throw RuntimeException(msg)
-            }
-
-            fileManager.writeManifestAndSuccessMarker()
-            fileManager.deleteRunningMarker()
-
-            log.info(
-                "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
-                endpoint,
-                manifest.chunks.size,
-                manifest.totalRecords,
-                manifest.totalFailed,
-            )
-
-            // publish run completed (after _SUCCESS)
-            eventPublisher.publishRunCompleted(manifest, endpoint)
-        } finally {
-            // Ensure writerExecutor is fully terminated even if an earlier step throws.
-            if (!writerExecutor.isTerminated) {
-                writerExecutor.shutdownNow()
-            }
-        }
-    }
-
     /**
      * Async variant of [close]. Performs the same work — shutdown writer, close
      * current chunk, await in-flight uploads, write manifest, publish run event —
@@ -179,56 +122,63 @@ class ChunkedSnapshotSink(
             )
         }
 
-        return writerDoneFuture
-            .thenCompose {
-                val err = writerError.get()
-                val manifest = fileManager.manifest()
-                if (err != null) {
-                    fileManager.cleanupOnFailure()
-                    eventPublisher.publishRunFailed(manifest, endpoint, err.message ?: "unknown")
-                    val failed: CompletableFuture<Void> = CompletableFuture()
-                    failed.completeExceptionally(RuntimeException("writer thread failed: ${err.message}", err))
-                    return@thenCompose failed
-                }
-
-                // Close current chunk and register its upload.
-                fileManager.closeCurrentChunk()?.let { stats -> publishWhenUploaded(stats) }
-
-                // Wait for all fire-and-forget chunk uploads to complete
-                // BEFORE writing the manifest (otherwise manifest references
-                // chunks not yet in MinIO — calculator/sync could read incomplete data).
-                fileManager.awaitAllUploadsAsync(ChunkFileManager.DEFAULT_AWAIT_TIMEOUT_MS).thenCompose { allUploaded ->
-                    if (!allUploaded) {
-                        val msg = "chunk uploads did not complete in time (in-flight=${fileManager.inFlightUploadCount()})"
-                        fileManager.cleanupOnFailure()
-                        eventPublisher.publishRunFailed(manifest, endpoint, msg)
-                        val failed: CompletableFuture<Void> = CompletableFuture()
-                        failed.completeExceptionally(RuntimeException(msg))
-                        return@thenCompose failed
-                    }
-
-                    fileManager.writeManifestAndSuccessMarker()
-                    fileManager.deleteRunningMarker()
-
-                    log.info(
-                        "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}",
-                        endpoint,
-                        manifest.chunks.size,
-                        manifest.totalRecords,
-                        manifest.totalFailed,
-                    )
-
-                    eventPublisher.publishRunCompleted(manifest, endpoint)
+        val closePipeline = writerDoneFuture.thenCompose { finalizeAfterWriter() }
+        val terminalPipeline = closePipeline
+            .handle { _, closeError ->
+                if (closeError == null) {
                     CompletableFuture.completedFuture<Void>(null)
+                } else {
+                    handleRunFailure(unwrapCompletionFailure(closeError))
                 }
             }
-            .whenComplete { _, _ ->
-                // Ensure writerExecutor is fully terminated even if any step throws.
-                if (!writerExecutor.isTerminated) {
-                    writerExecutor.shutdownNow()
+            .thenCompose { completion -> completion }
+        val lifetimeFuture = terminalPipeline.whenComplete { _, _ ->
+            ensureWriterExecutorTerminated()
+            closeAsyncExecutor.shutdown()
+        }
+
+        // Do not expose the lifetime-owning stage: cancelling a whenComplete
+        // dependent before its source settles suppresses that callback. A
+        // disposable dependent lets callers cancel their wait while cleanup,
+        // failure publication, and executor shutdown still run to completion.
+        return lifetimeFuture.thenApply { completion -> completion }
+    }
+
+    private fun finalizeAfterWriter(): CompletableFuture<Void> {
+        val writerFailure = writerError.get()
+        if (writerFailure != null) {
+            return CompletableFuture.failedFuture(
+                RuntimeException("writer thread failed: ${writerFailure.message}", writerFailure),
+            )
+        }
+
+        fileManager.closeCurrentChunk()?.let(::publishWhenUploaded)
+        return fileManager.awaitAllUploadsAsync(ChunkFileManager.DEFAULT_AWAIT_TIMEOUT_MS)
+            .thenCompose { allUploaded ->
+                if (!allUploaded) {
+                    val message = "chunk uploads did not complete in time " +
+                        "(in-flight=${fileManager.inFlightUploadCount()})"
+                    return@thenCompose CompletableFuture.failedFuture(RuntimeException(message))
                 }
-                closeAsyncExecutor.shutdown()
+
+                val manifestBytes = fileManager.finalizeManifestBytes()
+                val manifest = fileManager.manifest()
+                lifecycleStarted.set(true)
+                runCatching {
+                    runLifecycle.finalizeEndpoint(
+                        runId = manifest.runId,
+                        endpoint = endpoint,
+                        manifestBytes = manifestBytes,
+                        requiredPublish = { requiredPublications(manifest) },
+                    )
+                }.getOrElse { failure -> CompletableFuture.failedFuture(failure) }
+                    .thenAccept { state -> logClosed(manifest, state) }
             }
+    }
+
+    private fun requiredPublications(manifest: SnapshotChunkManifest): CompletableFuture<Void> {
+        val chunksPublished = CompletableFuture.allOf(*requiredChunkPublishes.toTypedArray())
+        return chunksPublished.thenCompose { eventPublisher.publishRunCompleted(manifest, endpoint) }
     }
 
     private fun runWriterLoop() {
@@ -257,23 +207,15 @@ class ChunkedSnapshotSink(
     }
 
     private fun handleSuccess(record: SnapshotChunkRecord.Success) {
-        try {
+        runCatching {
             val stats = fileManager.appendSuccess(record)
             if (stats != null) {
                 publishWhenUploaded(stats)
             }
-        } catch (ex: Exception) {
-            log.warn("[Sink] invalid bodyBytes for key={}, treating as failure: {}", record.key, ex.message)
-            fileManager.appendFailure(
-                SnapshotChunkRecord.Failure(
-                    key = record.key,
-                    endpoint = record.endpoint,
-                    keyType = record.keyType,
-                    httpStatus = record.httpStatus,
-                    fetchedAt = record.fetchedAt,
-                    errorMessage = "invalid body: ${ex.message}",
-                ),
-            )
+        }.exceptionOrNull()?.let { failure ->
+            if (failure is ChunkArtifactWriteException || failure is Error) throw failure
+            log.warn("[Sink] invalid bodyBytes for key={}, treating as failure: {}", record.key, failure.message)
+            appendRejectedRecord(record, "invalid body: ${failure.message}")
         }
     }
 
@@ -284,24 +226,110 @@ class ChunkedSnapshotSink(
      * the bytes verbatim. See ADR-729.
      */
     private fun handlePreSerialized(record: SnapshotChunkRecord.PreSerialized) {
-        try {
+        runCatching {
             val stats = fileManager.appendPreSerialized(record)
             if (stats != null) {
                 publishWhenUploaded(stats)
             }
-        } catch (ex: Exception) {
-            log.warn("[Sink] invalid pre-serialized body for key={}, treating as failure: {}", record.key, ex.message)
-            fileManager.appendFailure(
+        }.exceptionOrNull()?.let { failure ->
+            if (failure is ChunkArtifactWriteException || failure is Error) throw failure
+            log.warn(
+                "[Sink] invalid pre-serialized body for key={}, treating as failure: {}",
+                record.key,
+                failure.message,
+            )
+            appendRejectedRecord(record, "invalid pre-serialized body: ${failure.message}")
+        }
+    }
+
+    private fun appendRejectedRecord(record: SnapshotChunkRecord, errorMessage: String) {
+        when (record) {
+            is SnapshotChunkRecord.Success -> fileManager.appendFailure(
                 SnapshotChunkRecord.Failure(
                     key = record.key,
                     endpoint = record.endpoint,
                     keyType = record.keyType,
                     httpStatus = record.httpStatus,
                     fetchedAt = record.fetchedAt,
-                    errorMessage = "invalid pre-serialized body: ${ex.message}",
+                    errorMessage = errorMessage,
                 ),
             )
+
+            is SnapshotChunkRecord.PreSerialized -> fileManager.appendFailure(
+                SnapshotChunkRecord.Failure(
+                    key = record.key,
+                    endpoint = record.endpoint,
+                    keyType = record.keyType,
+                    httpStatus = record.httpStatus,
+                    fetchedAt = record.fetchedAt,
+                    errorMessage = errorMessage,
+                ),
+            )
+
+            is SnapshotChunkRecord.Failure,
+            SnapshotChunkRecord.CloseSignal,
+            -> error("only successful record variants can be rejected during chunk append")
         }
+    }
+
+    private fun ensureWriterExecutorTerminated() {
+        if (!writerExecutor.isTerminated) writerExecutor.shutdownNow()
+    }
+
+    private fun handleRunFailure(failure: Throwable): CompletableFuture<Void> {
+        val prepareFailure = CompletableFuture.runAsync(
+            {
+                runFailureStep(failure) { fileManager.abortCurrentChunk(failure) }
+                if (!lifecycleStarted.get()) {
+                    runFailureStep(failure) { fileManager.cleanupIncompleteArtifacts() }
+                }
+            },
+            closeAsyncExecutor,
+        )
+        return prepareFailure.thenCompose { publishRunFailedPreserving(failure) }
+    }
+
+    private fun publishRunFailedPreserving(originalFailure: Throwable): CompletableFuture<Void> {
+        val publication = runCatching {
+            eventPublisher.publishRunFailed(
+                fileManager.manifest(),
+                endpoint,
+                originalFailure.message ?: "unknown",
+            )
+        }.getOrElse { publicationFailure -> CompletableFuture.failedFuture(publicationFailure) }
+        return publication.handle<Void> { _, publicationFailure ->
+            publicationFailure
+                ?.let(::unwrapCompletionFailure)
+                ?.takeIf { failure -> failure !== originalFailure }
+                ?.let(originalFailure::addSuppressed)
+            throw originalFailure
+        }
+    }
+
+    private fun runFailureStep(primary: Throwable, action: () -> Unit) {
+        runCatching(action)
+            .exceptionOrNull()
+            ?.takeIf { failure -> failure !== primary }
+            ?.let(primary::addSuppressed)
+    }
+
+    private fun unwrapCompletionFailure(failure: Throwable): Throwable = when (failure) {
+        is java.util.concurrent.CompletionException,
+        is java.util.concurrent.ExecutionException,
+        -> failure.cause?.let(::unwrapCompletionFailure) ?: failure
+
+        else -> failure
+    }
+
+    private fun logClosed(manifest: SnapshotChunkManifest, state: RunState) {
+        log.info(
+            "[Sink] closed: endpoint={}, chunks={}, records={}, failed={}, state={}",
+            endpoint,
+            manifest.chunks.size,
+            manifest.totalRecords,
+            manifest.totalFailed,
+            state,
+        )
     }
 
     /**
@@ -326,21 +354,14 @@ class ChunkedSnapshotSink(
      * error.
      */
     private fun publishWhenUploaded(stats: ChunkStats) {
-        val future = stats.uploadFuture
-        if (future == null) {
-            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
-            return
+        val requiredPublish = stats.uploadFuture.thenCompose { receipt ->
+            eventPublisher.publishChunkReady(
+                stats,
+                receipt,
+                fileManager.manifest().runId,
+                endpoint,
+            )
         }
-        future.whenComplete { _, ex ->
-            if (ex != null) {
-                log.warn(
-                    "[Sink] chunk upload failed, skipping chunk-ready publish: chunk={} error={}",
-                    stats.path,
-                    ex.message,
-                )
-                return@whenComplete
-            }
-            eventPublisher.publishChunkReady(stats, fileManager.manifest().runId, endpoint)
-        }
+        requiredChunkPublishes.add(requiredPublish)
     }
 }

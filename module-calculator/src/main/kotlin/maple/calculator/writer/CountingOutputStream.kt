@@ -5,8 +5,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * OutputStream wrapper that counts bytes written through it. Thread-safe via
- * [AtomicLong]. Used by [CalculationResultWriter] to track uncompressed /
- * compressed byte counts for the streaming gzip → S3 upload path.
+ * [AtomicLong]. Used by [CalculationResultWriter] to track uncompressed bytes
+ * before the artifact session applies gzip.
  */
 class CountingOutputStream(
     private val delegate: OutputStream,

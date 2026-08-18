@@ -2,7 +2,8 @@ package maple.cleanup
 
 import maple.cleanup.config.CleanupProperties
 import maple.cleanup.inbox.InboxProperties
-import maple.expectation.infrastructure.config.KafkaConsumerConfig
+import maple.pipeline.artifact.config.ArtifactStorageAutoConfiguration
+import maple.pipeline.messaging.config.PipelineKafkaConsumerConfiguration
 import org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
@@ -16,7 +17,7 @@ import org.springframework.context.annotation.Import
         ManagementWebSecurityAutoConfiguration::class,
     ],
 )
-@Import(KafkaConsumerConfig::class, maple.expectation.infrastructure.storage.StorageConfig::class, maple.expectation.infrastructure.storage.MinioHealthIndicator::class)
+@Import(PipelineKafkaConsumerConfiguration::class, ArtifactStorageAutoConfiguration::class)
 @EnableConfigurationProperties(CleanupProperties::class, InboxProperties::class)
 class CleanupApplication
 

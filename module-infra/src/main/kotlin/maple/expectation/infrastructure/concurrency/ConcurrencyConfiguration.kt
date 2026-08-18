@@ -1,7 +1,5 @@
 package maple.expectation.infrastructure.concurrency
 
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
@@ -32,17 +30,6 @@ class ConcurrencyConfiguration {
 
     @Bean
     fun asyncGuard(): AsyncGuard = DefaultAsyncGuard()
-
-    /**
-     * Virtual-thread executor for IO-bound async upload work (currently
-     * used by [maple.expectation.infrastructure.storage.LocalFsObjectStorage.putStreamMultipart]
-     * to drain an InputStream to a temp file then call putFile). Virtual
-     * threads are suitable because the work is mostly blocking (file
-     * I/O) and we want unbounded concurrency without a thread-pool size
-     * config to maintain.
-     */
-    @Bean
-    fun uploadExecutor(): Executor = Executors.newVirtualThreadPerTaskExecutor()
 
     private fun namedExecutor(name: String, core: Int, max: Int): ThreadPoolTaskExecutor {
         val e = ThreadPoolTaskExecutor()

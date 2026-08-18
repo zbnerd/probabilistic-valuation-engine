@@ -1,5 +1,10 @@
 package maple.calculator.processor
 
+import maple.expectation.core.calculation.ComponentCosts
+import maple.expectation.core.calculation.ComponentTrials
+import maple.expectation.core.calculation.ValuationKernel
+import maple.expectation.core.calculation.ValuationResult
+import maple.expectation.core.calculation.probability.ProbabilityTableVersion
 import maple.expectation.core.dto.cube.CubeCalculationInput
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
@@ -99,7 +104,7 @@ class EquipmentCalculationInputConverterTest {
     }
 
     @Nested
-    inner class ToCalculationInputTest {
+    inner class ToValuationInputTest {
 
         @Test
         fun `maps all fields for normal equipment`() {
@@ -117,19 +122,17 @@ class EquipmentCalculationInputConverterTest {
                 starforceScrollFlag = "미사용"
             }
 
-            val result = converter.toCalculationInput(cubeInput, presetNo = 2)
+            val result = converter.toValuationInput(cubeInput)
 
             assertThat(result.itemName).isEqualTo("아케인소드")
             assertThat(result.itemLevel).isEqualTo(200)
-            assertThat(result.itemPart).isEqualTo("무기")
-            assertThat(result.itemEquipmentPart).isEqualTo("한손검")
-            assertThat(result.itemIcon).isEqualTo("https://icon.url")
-            assertThat(result.presetNo).isEqualTo(2)
-            assertThat(result.isNoljang).isFalse()
+            assertThat(result.part).isEqualTo("무기")
+            assertThat(result.equipmentPart).isEqualTo("한손검")
+            assertThat(result.noljang).isFalse()
             assertThat(result.potentialGrade).isEqualTo("유니크")
             assertThat(result.potentialOptions).containsExactly("공격력 +6%", "보스 공격력 +30%")
-            assertThat(result.additionalPotentialGrade).isEqualTo("에픽")
-            assertThat(result.additionalPotentialOptions).containsExactly("올스탯 +3%")
+            assertThat(result.additionalGrade).isEqualTo("에픽")
+            assertThat(result.additionalOptions).containsExactly("올스탯 +3%")
             assertThat(result.currentStar).isEqualTo(0)
             assertThat(result.targetStar).isEqualTo(17)
         }
@@ -140,7 +143,7 @@ class EquipmentCalculationInputConverterTest {
                 part = "보조무기"
                 itemEquipmentPart = "포스실드"
             }
-            assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("포스실드")
+            assertThat(converter.toValuationInput(cubeInput).part).isEqualTo("포스실드")
         }
 
         @Test
@@ -149,7 +152,7 @@ class EquipmentCalculationInputConverterTest {
                 part = "보조무기"
                 itemEquipmentPart = "소울링"
             }
-            assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("포스실드")
+            assertThat(converter.toValuationInput(cubeInput).part).isEqualTo("포스실드")
         }
 
         @Test
@@ -158,7 +161,7 @@ class EquipmentCalculationInputConverterTest {
                 part = "보조무기"
                 itemEquipmentPart = "블레이드"
             }
-            assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("보조무기")
+            assertThat(converter.toValuationInput(cubeInput).part).isEqualTo("보조무기")
         }
 
         @Test
@@ -167,19 +170,19 @@ class EquipmentCalculationInputConverterTest {
                 part = "모자"
                 itemEquipmentPart = "모자"
             }
-            assertThat(converter.toCalculationInput(cubeInput, 1).itemPart).isEqualTo("모자")
+            assertThat(converter.toValuationInput(cubeInput).part).isEqualTo("모자")
         }
 
         @Test
         fun `sets isNoljang true when starforceScrollFlag is 사용`() {
             val cubeInput = cubeInput { starforceScrollFlag = "사용" }
-            assertThat(converter.toCalculationInput(cubeInput, 1).isNoljang).isTrue()
+            assertThat(converter.toValuationInput(cubeInput).noljang).isTrue()
         }
 
         @Test
         fun `filters null options from potential options`() {
             val cubeInput = cubeInput { options = mutableListOf(null, "공격력 +6%", null) }
-            assertThat(converter.toCalculationInput(cubeInput, 1).potentialOptions).containsExactly("공격력 +6%")
+            assertThat(converter.toValuationInput(cubeInput).potentialOptions).containsExactly("공격력 +6%")
         }
 
         @Test
@@ -195,12 +198,11 @@ class EquipmentCalculationInputConverterTest {
                 additionalOptions = mutableListOf()
             }
 
-            val result = converter.toCalculationInput(cubeInput, 1)
+            val result = converter.toValuationInput(cubeInput)
 
             assertThat(result.itemName).isEqualTo("")
-            assertThat(result.itemPart).isEmpty()
-            assertThat(result.itemEquipmentPart).isEmpty()
-            assertThat(result.itemIcon).isEmpty()
+            assertThat(result.part).isEmpty()
+            assertThat(result.equipmentPart).isEmpty()
         }
     }
 
@@ -221,13 +223,19 @@ class EquipmentCalculationInputConverterTest {
                 starforce = 17
                 starforceScrollFlag = "미사용"
             }
-            val costs = CalculationCache.ComponentCosts(
+            val costs = ComponentCosts(
                 blackCubeCost = 1.23,
                 additionalCubeCost = 4.56,
                 starforceCost = 7.89,
             )
 
-            val result = converter.toCalculationResult("abc123", 3, cubeInput, costs, "SUCCESS", null)
+            val result = converter.toCalculationResult(
+                "abc123",
+                3,
+                cubeInput,
+                valuationResult(costs),
+                "SUCCESS",
+            )
 
             assertThat(result.ocid).isEqualTo("abc123")
             assertThat(result.presetNo).isEqualTo(3)
@@ -257,7 +265,7 @@ class EquipmentCalculationInputConverterTest {
                 part = "무기"
             }
 
-            val result = converter.toCalculationResult("abc", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "ERROR", "calculation failed")
+            val result = converter.toErrorResult("abc", 1, cubeInput, "calculation failed")
 
             assertThat(result.status).isEqualTo("ERROR")
             assertThat(result.errorMessage).isEqualTo("calculation failed")
@@ -273,7 +281,13 @@ class EquipmentCalculationInputConverterTest {
                 starforce = 0
             }
 
-            val result = converter.toCalculationResult("xyz", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "SKIPPED", null)
+            val result = converter.toCalculationResult(
+                "xyz",
+                1,
+                cubeInput,
+                valuationResult(ComponentCosts(null, null, null)),
+                "SKIPPED",
+            )
 
             assertThat(result.status).isEqualTo("SKIPPED")
             assertThat(result.totalCost).isNull()
@@ -290,7 +304,13 @@ class EquipmentCalculationInputConverterTest {
                 additionalOptions = mutableListOf()
             }
 
-            val result = converter.toCalculationResult("abc", 1, cubeInput, CalculationCache.ComponentCosts.empty(), "SKIPPED", null)
+            val result = converter.toCalculationResult(
+                "abc",
+                1,
+                cubeInput,
+                valuationResult(ComponentCosts(null, null, null)),
+                "SKIPPED",
+            )
 
             assertThat(result.itemName).isEqualTo("")
             assertThat(result.itemPart).isNull()
@@ -298,4 +318,12 @@ class EquipmentCalculationInputConverterTest {
             assertThat(result.additionalGrade).isNull()
         }
     }
+
+    private fun valuationResult(costs: ComponentCosts): ValuationResult = ValuationResult(
+        costs = costs,
+        trials = ComponentTrials(null, null),
+        enhancePath = "item",
+        tableVersion = ProbabilityTableVersion("csv-v1.0", "a".repeat(64)),
+        logicVersion = ValuationKernel.LOGIC_VERSION,
+    )
 }

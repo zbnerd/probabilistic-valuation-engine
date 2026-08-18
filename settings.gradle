@@ -34,3 +34,12 @@ include 'module-auth'
 
 // Cleanup module (Airflow-triggered disk GC, hosted as standalone Spring Boot app)
 include 'module-cleanup'
+
+// Typed object-storage artifacts, lifecycle, retention, and cleanup inbox
+include 'module-pipeline-artifact'
+
+// Shared Kafka delivery outcome, retry, DLT, and partition-lane ownership
+include 'module-pipeline-messaging'
+
+// Shared Nexon transport, failure taxonomy, and credential-safe clients
+include 'module-nexon-client'

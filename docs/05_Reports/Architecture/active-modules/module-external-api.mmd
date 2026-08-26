@@ -1,0 +1,61 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  subgraph "Inbound"
+    direction TB
+    AIRFLOW["Airflow<br/>phase trigger"]
+    KIN[("Kafka inbound<br/>urgent · auth request")]
+  end
+
+  subgraph "module-external-api"
+    direction TB
+    SCHED["ExternalApiScheduler"]
+    PHASES["RANKING_FETCH → OCID_LOOKUP<br/>→ CHARACTER_BASIC → ITEM_EQUIPMENT"]
+    URGENT["UrgentCharacterRequestConsumer"]
+    AUTH_HANDLER["AuthCharacterFetchHandler"]
+    SINK["ChunkedSnapshotSink<br/>bounded single-writer queue"]
+    GZIP["GzipJsonlChunkWriter<br/>chunk rotation"]
+    PUBLISH["Snapshot / urgent event publishers"]
+  end
+
+  subgraph "Shared active modules"
+    direction TB
+    MSG["module-pipeline-messaging<br/>subscription · DeliveryOutcome"]
+    NEXON_CLIENT["module-nexon-client<br/>SYSTEM_BULK · USER_BYOK"]
+    ARTIFACT["module-pipeline-artifact<br/>typed keys · ArtifactWriter"]
+    CONTRACTS["module-common + module-core<br/>events · domain contracts"]
+  end
+
+  NEXON[["Nexon OpenAPI"]]
+  MINIO[("MinIO<br/>source JSONL.gz artifacts")]
+  KOUT[("Kafka outbound<br/>chunk-ready · run status · auth response")]
+
+  AIRFLOW --> SCHED --> PHASES
+  KIN --> MSG
+  MSG --> URGENT
+  MSG --> AUTH_HANDLER
+
+  PHASES --> NEXON_CLIENT
+  URGENT --> NEXON_CLIENT
+  AUTH_HANDLER --> NEXON_CLIENT
+  NEXON_CLIENT --> NEXON
+
+  PHASES --> SINK
+  URGENT --> SINK
+  SINK --> GZIP --> ARTIFACT --> MINIO
+  ARTIFACT -->|"upload completed"| PUBLISH --> KOUT
+  AUTH_HANDLER -->|"auth-character-fetch-response"| KOUT
+
+  PHASES -.-> CONTRACTS
+  URGENT -.-> CONTRACTS
+  AUTH_HANDLER -.-> CONTRACTS
+
+  classDef entry fill:#F1F5F9,stroke:#475569,color:#172033;
+  classDef process fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033;
+  classDef store fill:#FEF3C7,stroke:#D97706,color:#172033,stroke-width:2px;
+  classDef external fill:#ECFDF5,stroke:#059669,color:#172033;
+  class AIRFLOW,KIN,KOUT entry;
+  class SCHED,PHASES,URGENT,AUTH_HANDLER,SINK,GZIP,PUBLISH process;
+  class MSG,NEXON_CLIENT,ARTIFACT,CONTRACTS platform;
+  class MINIO store;
+  class NEXON external;

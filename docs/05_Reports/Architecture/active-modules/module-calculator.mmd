@@ -1,0 +1,52 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  KIN[("Kafka<br/>snapshot chunk-ready<br/>normal + urgent")]
+
+  subgraph "module-calculator"
+    direction TB
+    SUB["CalculatorSnapshotSubscription"]
+    CONSUMER["KafkaSnapshotChunkReadyConsumer<br/>parse event"]
+    DISPATCH["SnapshotDispatchService<br/>one workload attempt"]
+    COORD["CalculatorChunkProcessingCoordinator<br/>endpoint filter · idempotency · 4 permits"]
+    READ["Read gzip JSONL stream"]
+    RECORDS["Record channel"]
+    PARSE["Parse workers<br/>record → preset equipment items"]
+    ITEMS["Flat item channel"]
+    CACHE["ValuationCache<br/>deduplicate calculation keys"]
+    RESULTS["Result channel"]
+    WRITER["CalculationResultWriter<br/>stream gzip JSONL"]
+    PUB["KafkaResultEventPublisher"]
+  end
+
+  subgraph "Shared active modules"
+    direction TB
+    MSG["module-pipeline-messaging<br/>partition lane · retry · safe ACK"]
+    EVENTS["module-common<br/>Snapshot / Result event DTOs"]
+    CORE["module-core<br/>ValuationKernel<br/>cube · starforce · flame"]
+    ARTIFACT["module-pipeline-artifact<br/>CalculatorArtifactLayout · storage"]
+  end
+
+  MINIO_IN[("MinIO<br/>source chunk")]
+  MINIO_OUT[("MinIO<br/>result chunk")]
+  KOUT[("Kafka<br/>calculator.result.chunk-ready")]
+
+  KIN --> MSG --> SUB --> CONSUMER --> DISPATCH --> COORD
+  EVENTS -.-> CONSUMER
+  COORD -->|"item-equipment only"| ARTIFACT
+  ARTIFACT -->|"exists / getStream"| MINIO_IN --> READ
+  READ --> RECORDS --> PARSE --> ITEMS --> CACHE
+  CACHE --> CORE --> RESULTS --> WRITER --> ARTIFACT
+  ARTIFACT -->|"putFileAsync completed"| MINIO_OUT
+  MINIO_OUT --> PUB --> KOUT
+  KOUT -.->|"consumer: module-synchronizer"| SYNC_TARGET["module-synchronizer"]
+
+  classDef process fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef queue fill:#FFE4E6,stroke:#E11D48,color:#172033;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033;
+  classDef store fill:#FEF3C7,stroke:#D97706,color:#172033,stroke-width:2px;
+  classDef external fill:#ECFDF5,stroke:#059669,color:#172033;
+  class SUB,CONSUMER,DISPATCH,COORD,READ,PARSE,CACHE,WRITER,PUB process;
+  class RECORDS,ITEMS,RESULTS queue;
+  class MSG,EVENTS,CORE,ARTIFACT platform;
+  class KIN,KOUT,MINIO_IN,MINIO_OUT store;
+  class SYNC_TARGET external;

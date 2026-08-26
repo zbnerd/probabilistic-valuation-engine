@@ -1,0 +1,48 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B"}}}%%
+sequenceDiagram
+  actor Client
+  participant Rest as module-rest-controller<br/>AuthController
+  participant Login as module-auth<br/>LoginService
+  participant Core as module-core<br/>auth contracts
+  participant Pending as PendingLoginRegistry
+  participant Kafka as Kafka
+  participant Msg as module-pipeline-messaging
+  participant External as module-external-api<br/>AuthCharacterFetchHandler
+  participant NexonClient as module-nexon-client<br/>USER_BYOK
+  participant Nexon as Nexon OpenAPI
+  participant Session as SessionCacheService
+  participant Jwt as JwtGeneratorService
+
+  Client->>Rest: POST /api/v6/auth/login
+  Rest->>Login: login(apiKey, userIgn)
+  Login->>Core: create CharacterFetchRequest
+  Login->>Pending: register(eventId)
+  Login-)Kafka: auth-character-fetch-request
+  Kafka->>Msg: deliver record
+  Msg->>External: sanitized DeliveryContext
+  External->>NexonClient: getCharacterList(apiKey)
+  NexonClient->>Nexon: BYOK request
+  Nexon-->>NexonClient: character list or typed failure
+  NexonClient-->>External: neutral character model
+  External-)Kafka: auth-character-fetch-response
+  Kafka->>Pending: AuthResponseConsumer.complete(response)
+  Pending-->>Login: complete login future
+
+  alt Nexon response rejected
+    Login-->>Rest: 401 LoginRejectedException
+    Rest-->>Client: authentication failure
+  else valid account and character
+    Login->>Core: derive fingerprint and create Session
+    Login->>Session: find cached session
+    alt session cache hit
+      Session-->>Login: existing session
+    else cache miss
+      Login->>Session: save new session
+    end
+    Login->>Jwt: generate signed token
+    Jwt-->>Login: JWT
+    Login-->>Rest: LoginResult
+    Rest-->>Client: token + session metadata
+  end
+
+  Note over Msg,External: Technical retry, DLT sanitization, and safe ACK are owned by module-pipeline-messaging.

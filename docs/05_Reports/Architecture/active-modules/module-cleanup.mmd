@@ -1,0 +1,47 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  AIRFLOW["Airflow / operator"]
+  KIN[("Kafka<br/>synchronizer.chunk.consumed")]
+
+  subgraph "Shared active modules"
+    MSG["module-pipeline-messaging<br/>retry · safe ACK"]
+    EVENTS["module-common<br/>ChunkConsumedEvent"]
+    ARTIFACT["module-pipeline-artifact<br/>retention · catalog · durable inbox"]
+  end
+
+  subgraph "module-cleanup"
+    direction TB
+    SUB["CleanupInboxSubscription"]
+    INBOX["ConsumedChunkInbox<br/>putIfAbsent by eventId"]
+    API["CleanupController<br/>Airflow-triggered endpoints"]
+    RUN_GC["RunCleanupService<br/>source / calculator run retention"]
+    DRAIN["Inbox drain<br/>delete target then inbox entry"]
+    STALE["StaleKafkaSkipService<br/>scan only · no offset commit"]
+  end
+
+  MINIO[("MinIO<br/>artifacts + cleanup/inbox entries")]
+  KAFKA[("Kafka topic partitions")]
+  REPORT["Deletion result /<br/>recommended reset offsets"]
+
+  KIN --> MSG --> SUB --> INBOX
+  EVENTS -.-> INBOX
+  INBOX --> ARTIFACT -->|"conditional create"| MINIO
+
+  AIRFLOW -->|"POST /runs or /calculator-runs"| API --> RUN_GC
+  RUN_GC --> ARTIFACT -->|"exact-prefix deletion"| MINIO
+
+  AIRFLOW -->|"POST /inbox"| API --> DRAIN
+  DRAIN --> ARTIFACT
+  DRAIN -->|"delete source + result, then inbox entry"| MINIO
+
+  AIRFLOW -->|"POST /stale-kafka"| API --> STALE --> KAFKA
+  STALE -->|"read-only recommendation"| REPORT
+
+  classDef process fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033;
+  classDef store fill:#FEF3C7,stroke:#D97706,color:#172033,stroke-width:2px;
+  classDef external fill:#ECFDF5,stroke:#059669,color:#172033;
+  class SUB,INBOX,API,RUN_GC,DRAIN,STALE process;
+  class MSG,EVENTS,ARTIFACT platform;
+  class KIN,MINIO,KAFKA store;
+  class AIRFLOW,REPORT external;

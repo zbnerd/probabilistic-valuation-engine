@@ -1,0 +1,62 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  CLIENT["API client"]
+
+  subgraph "module-rest-controller"
+    direction TB
+    AUTH_FILTER["JWT interceptor + IGN validation"]
+
+    subgraph "Expectation read path"
+      EXPECT_API["ExpectationV6Controller"]
+      FACADE["ExpectationReadFacade<br/>in-flight dedup + request buffer"]
+      BATCH["BatchReadScheduler + BatchResolver"]
+      CACHE["ReadModelCacheService"]
+      QUERY["ReadModelQueryService<br/>batch JDBC read"]
+      NEGATIVE["NegativeCacheService"]
+      URGENT_DEDUP["UrgentDedupService<br/>Redis SETNX"]
+      URGENT_PUB["UrgentTriggerPublisher"]
+      NOT_FOUND["UrgentCharacterNotFoundConsumer"]
+    end
+
+    subgraph "Other read/write APIs"
+      RANKING_API["EquipmentRankingController<br/>Redis → DB fallback"]
+      POPULAR_API["PopularCharacterController<br/>rolling Redis scores"]
+      LIKE_API["LikeController<br/>JDBC toggle + status"]
+      AUTH_API["AuthController"]
+    end
+  end
+
+  AUTH_MODULE["module-auth<br/>login · session · JWT"]
+  CONTRACTS["module-common + module-core<br/>validation · auth/domain contracts"]
+  PG[("PostgreSQL<br/>read models · likes · OCID")]
+  REDIS[("Redis<br/>read cache · negative cache · ranking · popular")]
+  KAFKA[("Kafka<br/>urgent request / not-found feedback")]
+  EXT_TARGET["module-external-api<br/>urgent collection"]
+
+  CLIENT --> AUTH_FILTER
+  AUTH_FILTER --> EXPECT_API --> FACADE --> BATCH
+  BATCH --> CACHE --> REDIS
+  BATCH -->|"cache miss"| QUERY --> PG
+  BATCH -->|"DB miss"| NEGATIVE --> REDIS
+  BATCH -->|"not negatively cached"| URGENT_DEDUP --> REDIS
+  URGENT_DEDUP --> URGENT_PUB --> KAFKA --> EXT_TARGET
+  EXT_TARGET -.->|"urgent-character-not-found"| KAFKA --> NOT_FOUND --> NEGATIVE
+
+  AUTH_FILTER --> RANKING_API
+  RANKING_API --> REDIS
+  RANKING_API -->|"fallback"| PG
+  AUTH_FILTER --> POPULAR_API --> REDIS
+  AUTH_FILTER --> LIKE_API --> PG
+  AUTH_FILTER --> AUTH_API --> AUTH_MODULE
+
+  AUTH_FILTER -.-> CONTRACTS
+  FACADE -.-> CONTRACTS
+
+  classDef process fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033;
+  classDef store fill:#FEF3C7,stroke:#D97706,color:#172033,stroke-width:2px;
+  classDef external fill:#ECFDF5,stroke:#059669,color:#172033;
+  class AUTH_FILTER,EXPECT_API,FACADE,BATCH,CACHE,QUERY,NEGATIVE,URGENT_DEDUP,URGENT_PUB,NOT_FOUND,RANKING_API,POPULAR_API,LIKE_API,AUTH_API process;
+  class AUTH_MODULE,CONTRACTS platform;
+  class PG,REDIS,KAFKA store;
+  class CLIENT,EXT_TARGET external;

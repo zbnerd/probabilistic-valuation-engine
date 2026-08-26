@@ -1,0 +1,65 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  subgraph "Executable modules"
+    direction LR
+    EXT["module-external-api<br/>COLLECT"]
+    CALC["module-calculator<br/>COMPUTE"]
+    SYNC["module-synchronizer<br/>PROJECT"]
+    CLEAN["module-cleanup<br/>CLEAN"]
+    REST["module-rest-controller<br/>SERVE"]
+  end
+
+  subgraph "Service library"
+    AUTH["module-auth<br/>JWT · session · login orchestration"]
+  end
+
+  subgraph "Pipeline platform"
+    ART["module-pipeline-artifact<br/>artifact identity · storage · lifecycle"]
+    MSG["module-pipeline-messaging<br/>delivery outcome · retry · ACK · DLT"]
+    NEXON["module-nexon-client<br/>SYSTEM_BULK · USER_BYOK transports"]
+  end
+
+  subgraph "Domain foundation"
+    CORE["module-core<br/>valuation domain · ports · policies"]
+    COMMON["module-common<br/>events · errors · ObjectStorage port"]
+  end
+
+  EXT -.-> COMMON
+  EXT -.-> CORE
+  EXT -.-> ART
+  EXT -.-> MSG
+  EXT -.-> NEXON
+
+  CALC -.-> COMMON
+  CALC -.-> CORE
+  CALC -.-> ART
+  CALC -.-> MSG
+
+  SYNC -.-> COMMON
+  SYNC -.-> CORE
+  SYNC -.-> ART
+  SYNC -.-> MSG
+
+  CLEAN -.-> COMMON
+  CLEAN -.-> ART
+  CLEAN -.-> MSG
+
+  REST -.-> COMMON
+  REST -.-> CORE
+  REST -.-> AUTH
+
+  AUTH -.-> COMMON
+  AUTH -.-> CORE
+  ART -.-> COMMON
+  MSG -.-> COMMON
+  NEXON -.-> COMMON
+  CORE -.-> COMMON
+
+  classDef executable fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef service fill:#FCE7F3,stroke:#DB2777,color:#172033,stroke-width:2px;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033,stroke-width:2px;
+  classDef domain fill:#DCFCE7,stroke:#16A34A,color:#172033,stroke-width:2px;
+  class EXT,CALC,SYNC,CLEAN,REST executable;
+  class AUTH service;
+  class ART,MSG,NEXON platform;
+  class CORE,COMMON domain;

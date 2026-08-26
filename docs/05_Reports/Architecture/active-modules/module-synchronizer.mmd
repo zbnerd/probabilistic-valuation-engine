@@ -1,0 +1,78 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, Noto Sans KR, sans-serif","primaryTextColor":"#172033","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"}}}%%
+flowchart TB
+  KIN[("Kafka inbound<br/>basic · urgent basic · OCID · result")]
+
+  subgraph "Shared delivery"
+    MSG["module-pipeline-messaging<br/>partition lane · retry · ACK · DLT"]
+    EVENTS["module-common + module-core<br/>event and chunk contracts"]
+    ARTIFACT["module-pipeline-artifact<br/>typed object keys · storage"]
+  end
+
+  subgraph "module-synchronizer"
+    direction TB
+    SUBS["SynchronizerSubscriptions"]
+
+    subgraph "Basic projection"
+      BASIC["BasicSnapshotChunkConsumer"]
+      BASIC_SERVICE["BasicChunkIngestionService<br/>character-basic only"]
+      BASIC_REPO["CharacterBasicRepository<br/>bulk upsert"]
+    end
+
+    subgraph "OCID projection"
+      OCID["OcidLookupRunConsumer"]
+      OCID_SERVICE["OcidLookupService<br/>merge mapping"]
+      OCID_REPO["OcidMappingRepository<br/>batch upsert"]
+      OCID_REDIS["OcidMappingRedisWriter"]
+    end
+
+    subgraph "Equipment result projection"
+      RESULT["KafkaResultChunkConsumer"]
+      TEMPLATE["ChunkConsumerTemplate<br/>idempotent execution + lease"]
+      ORCH["ChunkPipelineOrchestrator"]
+      TRANSFORM["read → group → build → prepare"]
+      EQUIP_REPO["EquipmentReadModelRepository<br/>JDBC bulk upsert"]
+      RANKING["EquipmentRankingRedisWriter"]
+    end
+
+    CONSUMED["KafkaChunkConsumedEventPublisher"]
+  end
+
+  MINIO[("MinIO<br/>source + result artifacts")]
+  PG[("PostgreSQL<br/>basic · OCID · equipment read models<br/>chunk_execution")]
+  REDIS[("Redis<br/>OCID map · ranking ZSET")]
+  KOUT[("Kafka<br/>synchronizer.chunk.consumed")]
+  CLEAN_TARGET["module-cleanup"]
+
+  KIN --> MSG --> SUBS
+  EVENTS -.-> SUBS
+
+  SUBS --> BASIC --> BASIC_SERVICE
+  ARTIFACT --> MINIO
+  MINIO --> BASIC_SERVICE --> BASIC_REPO --> PG
+  BASIC_SERVICE --> CONSUMED
+
+  SUBS --> OCID --> OCID_SERVICE
+  MINIO --> OCID_SERVICE
+  OCID_SERVICE --> OCID_REPO --> PG
+  OCID_SERVICE --> OCID_REDIS --> REDIS
+
+  SUBS --> RESULT --> TEMPLATE
+  TEMPLATE <--> PG
+  TEMPLATE --> ORCH
+  MINIO --> ORCH --> TRANSFORM
+  TRANSFORM --> EQUIP_REPO --> PG
+  TRANSFORM --> RANKING --> REDIS
+  TEMPLATE -->|"durable projection succeeded"| CONSUMED
+
+  CONSUMED --> KOUT --> CLEAN_TARGET
+
+  classDef process fill:#DBEAFE,stroke:#2563EB,color:#172033,stroke-width:2px;
+  classDef platform fill:#F3E8FF,stroke:#7C3AED,color:#172033;
+  classDef store fill:#FEF3C7,stroke:#D97706,color:#172033,stroke-width:2px;
+  classDef event fill:#FFE4E6,stroke:#E11D48,color:#172033;
+  classDef target fill:#ECFDF5,stroke:#059669,color:#172033;
+  class SUBS,BASIC,BASIC_SERVICE,BASIC_REPO,OCID,OCID_SERVICE,OCID_REPO,OCID_REDIS,RESULT,TEMPLATE,ORCH,TRANSFORM,EQUIP_REPO,RANKING,CONSUMED process;
+  class MSG,EVENTS,ARTIFACT platform;
+  class MINIO,PG,REDIS store;
+  class KIN,KOUT event;
+  class CLEAN_TARGET target;
